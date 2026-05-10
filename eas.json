@@ -1,0 +1,55 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "dev",
+      "ios": {
+        "simulator": true
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "APP_ENV": "development"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "dev",
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "APP_ENV": "preview"
+      }
+    },
+    "pilot": {
+      "distribution": "store",
+      "channel": "pilot",
+      "autoIncrement": true,
+      "env": {
+        "APP_ENV": "pilot"
+      }
+    }
+  },
+  "submit": {
+    "pilot": {
+      "ios": {
+        "appleTeamId": "PLACEHOLDER-APPLE-TEAM-ID",
+        "ascAppId": "PLACEHOLDER-ASC-APP-ID"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-play-key.json",
+        "track": "internal"
+      }
+    }
+  }
+}

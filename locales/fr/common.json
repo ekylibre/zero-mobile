@@ -1,0 +1,109 @@
+{
+  "common": {
+    "appName": "Zero Mobile",
+    "loading": "Chargement…",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "retry": "Réessayer",
+    "back": "Retour",
+    "ok": "OK"
+  },
+  "tabs": {
+    "interventions": "Interventions",
+    "map": "Carte",
+    "settings": "Paramètres"
+  },
+  "login": {
+    "title": "Connexion à Ekylibre",
+    "subtitle": "Renseignez l'adresse de votre instance et vos identifiants.",
+    "instanceUrlLabel": "Adresse de l'instance",
+    "instanceUrlPlaceholder": "https://ferme.ekylibre.com",
+    "emailLabel": "Email",
+    "emailPlaceholder": "vous@exemple.com",
+    "passwordLabel": "Mot de passe",
+    "submit": "Se connecter",
+    "submitting": "Connexion…",
+    "sessionExpired": "Votre session a expiré, veuillez vous reconnecter.",
+    "errors": {
+      "instanceUrlRequired": "L'adresse de l'instance est requise.",
+      "instanceUrlInvalid": "Cette adresse n'est pas une URL valide.",
+      "instanceUrlNotHttps": "L'adresse doit commencer par https://",
+      "emailRequired": "L'email est requis.",
+      "emailInvalid": "Email invalide.",
+      "passwordRequired": "Le mot de passe est requis.",
+      "invalidCredentials": "Identifiants incorrects.",
+      "network": "Impossible de joindre le serveur. Vérifiez votre connexion.",
+      "server": "Erreur du serveur Ekylibre. Réessayez dans un instant."
+    }
+  },
+  "initialSync": {
+    "title": "Synchronisation initiale",
+    "subtitle": "Téléchargement du catalogue de votre ferme. Une connexion internet est requise.",
+    "counter": "{{current}} / {{total}}",
+    "substep": "{{label}} ({{current}} / {{total}})",
+    "errorTitle": "Échec de la synchronisation",
+    "errorGeneric": "Une erreur est survenue. Vérifiez votre connexion et réessayez.",
+    "steps": {
+      "procedures": "Procédures",
+      "products": "Produits",
+      "cultivable_zones": "Parcelles cultivables",
+      "variants": "Variantes",
+      "done": "Terminé"
+    }
+  },
+  "interventions": {
+    "list": {
+      "title": "Mes interventions",
+      "empty": "Aucune intervention pour l'instant.",
+      "emptySubtitle": "Démarrez une nouvelle intervention pour la voir apparaître ici.",
+      "newAction": "+ Nouvelle intervention",
+      "pendingBanner_one": "{{count}} intervention à synchroniser",
+      "pendingBanner_other": "{{count}} interventions à synchroniser"
+    },
+    "new": {
+      "title": "Nouvelle intervention",
+      "placeholder": "Le picker de procédure et le formulaire spraying seront livrés en P5."
+    },
+    "detail": {
+      "title": "Détail de l'intervention",
+      "notFound": "Cette intervention est introuvable.",
+      "errorTitle": "Échec de la synchronisation",
+      "dates": "Dates",
+      "startedAt": "Début",
+      "stoppedAt": "Fin",
+      "duration": "Durée travaillée",
+      "durationNone": "—",
+      "durationMinutes": "{{minutes}} min",
+      "durationHours_one": "{{hours}} heure",
+      "durationHours_other": "{{hours}} heures",
+      "durationHoursMinutes": "{{hours}} h {{minutes}} min",
+      "description": "Description",
+      "targets": "Cibles (parcelles)",
+      "doers": "Conducteurs",
+      "inputs": "Intrants",
+      "tools": "Outils",
+      "workingPeriods": "Périodes de travail"
+    },
+    "syncState": {
+      "pending": "À synchroniser",
+      "syncing": "En cours",
+      "synced": "Synchronisée",
+      "error": "Erreur"
+    }
+  },
+  "map": {
+    "placeholder": "La carte des parcelles sera livrée en P7."
+  },
+  "settings": {
+    "title": "Paramètres",
+    "account": "Compte",
+    "instance": "Instance : {{instanceUrl}}",
+    "signedInAs": "Connecté en tant que {{email}}",
+    "version": "Version : {{version}}",
+    "logoutAction": "Se déconnecter",
+    "logoutConfirmTitle": "Se déconnecter ?",
+    "logoutConfirmMessage": "Vos identifiants seront effacés de l'appareil.",
+    "logoutConfirm": "Se déconnecter",
+    "loggingOut": "Déconnexion…"
+  }
+}
