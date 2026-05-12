@@ -63,7 +63,18 @@
       "emptySubtitle": "Démarrez une nouvelle intervention pour la voir apparaître ici.",
       "newAction": "+ Nouvelle intervention",
       "pendingBanner_one": "{{count}} intervention à synchroniser",
-      "pendingBanner_other": "{{count}} interventions à synchroniser"
+      "pendingBanner_other": "{{count}} interventions à synchroniser",
+      "errorBanner_one": "{{count}} intervention en erreur. Ouvrez-la pour voir le détail.",
+      "errorBanner_other": "{{count}} interventions en erreur. Ouvrez-les pour voir le détail.",
+      "syncAction": "Synchroniser",
+      "syncStatus": {
+        "idle": "Prêt",
+        "pulling": "Téléchargement du catalogue…",
+        "pushing": "Envoi des interventions…",
+        "error": "Échec de la synchronisation"
+      },
+      "lastSyncAt": "Dernière sync : {{time}}",
+      "lastSyncNever": "Jamais synchronisé sur cet appareil."
     },
     "new": {
       "title": "Nouvelle intervention",
@@ -168,6 +179,8 @@
     "logoutAction": "Se déconnecter",
     "logoutConfirmTitle": "Se déconnecter ?",
     "logoutConfirmMessage": "Vos identifiants seront effacés de l'appareil.",
+    "logoutPendingWarning_one": "{{count}} intervention non synchronisée sera perdue.",
+    "logoutPendingWarning_other": "{{count}} interventions non synchronisées seront perdues.",
     "logoutConfirm": "Se déconnecter",
     "loggingOut": "Déconnexion…"
   }

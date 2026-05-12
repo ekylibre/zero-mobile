@@ -2,7 +2,9 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 
 import type { Intervention, Procedure } from '@core/db/models';
+import { useSyncCycle } from '@core/sync/use-sync-cycle';
 import {
+  useErrorInterventionCount,
   useInterventions,
   usePendingInterventionCount,
   useProcedures,
@@ -14,6 +16,8 @@ export default function InterventionsListScreen() {
   const interventions = useInterventions();
   const procedures = useProcedures();
   const pendingCount = usePendingInterventionCount();
+  const errorCount = useErrorInterventionCount();
+  const { startSync, status, lastError, lastSyncAt, isBusy } = useSyncCycle();
   const [refreshing, setRefreshing] = useState(false);
 
   const procedureLabels = useMemo(
@@ -21,12 +25,28 @@ export default function InterventionsListScreen() {
     [procedures],
   );
 
-  // P4 : pull-to-refresh placeholder. P6 le branchera sur le sync engine.
+  // Pull-to-refresh = même cycle que le bouton Synchroniser. On garde un
+  // état local `refreshing` pour piloter le RefreshControl indépendamment
+  // de `status` (qui passe pulling→pushing→idle plus rapidement que le
+  // geste utilisateur).
   const onRefresh = useCallback(async () => {
+    if (isBusy) return;
     setRefreshing(true);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    setRefreshing(false);
-  }, []);
+    try {
+      await startSync();
+    } catch {
+      // Erreur déjà stockée dans le store via setError, rien à faire ici.
+    } finally {
+      setRefreshing(false);
+    }
+  }, [isBusy, startSync]);
+
+  const onSync = useCallback(() => {
+    if (isBusy) return;
+    void startSync().catch(() => {
+      // Idem : géré par le store, on évite l'unhandled rejection.
+    });
+  }, [isBusy, startSync]);
 
   const onItemPress = useCallback(
     (intervention: Intervention) => {
@@ -47,8 +67,14 @@ export default function InterventionsListScreen() {
       interventions={interventions}
       procedureLabels={procedureLabels}
       pendingCount={pendingCount}
+      errorCount={errorCount}
+      syncStatus={status}
+      syncError={lastError}
+      syncBusy={isBusy}
+      lastSyncAt={lastSyncAt}
       refreshing={refreshing}
       onRefresh={onRefresh}
+      onSync={onSync}
       onItemPress={onItemPress}
       onNew={onNew}
     />

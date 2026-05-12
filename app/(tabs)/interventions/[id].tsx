@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useSyncCycle } from '@core/sync/use-sync-cycle';
 import { useInterventionById, useProcedureByName } from '@features/catalog/hooks';
 import { SyncBadge } from '@ui/index';
 
@@ -15,6 +16,7 @@ export default function InterventionDetailScreen() {
 
   const detail = useInterventionById(id);
   const procedure = useProcedureByName(detail.intervention?.procedureName);
+  const { startSync, isBusy: syncBusy } = useSyncCycle();
 
   if (!detail.intervention) {
     return (
@@ -36,8 +38,10 @@ export default function InterventionDetailScreen() {
   const durationLabel = formatDuration(intervention.workingDurationSeconds, t);
 
   const onRetry = async () => {
-    // P4 : remet l'intervention en `pending` pour qu'elle soit poussée
-    // au prochain cycle. Le vrai cycle de sync arrive en P6.
+    // Repasse l'intervention en `pending` pour qu'elle soit re-tentée, puis
+    // déclenche immédiatement un cycle de sync. L'utilisateur s'attend à ce
+    // que le tap « Réessayer » envoie tout de suite — pas à attendre le
+    // prochain cycle manuel.
     await database.write(async () => {
       const collection = database.collections.get<Intervention>(Tables.interventions);
       const fresh = await collection.find(intervention.id);
@@ -45,6 +49,10 @@ export default function InterventionDetailScreen() {
         m.syncState = 'pending';
         m.syncErrorMessage = null;
       });
+    });
+    void startSync().catch(() => {
+      // L'erreur est déjà stockée dans le store + sur l'intervention si
+      // elle re-échoue. Pas de remontée locale ici.
     });
   };
 
@@ -62,7 +70,11 @@ export default function InterventionDetailScreen() {
           <Pressable
             accessibilityRole="button"
             onPress={onRetry}
-            style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
+            disabled={syncBusy}
+            style={({ pressed }) => [
+              styles.retryButton,
+              (pressed || syncBusy) && styles.retryButtonPressed,
+            ]}
             testID="intervention-retry"
           >
             <Text style={styles.retryButtonText}>{t('common.retry')}</Text>

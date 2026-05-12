@@ -25,3 +25,19 @@ export class AuthError extends ApiError {
     this.name = 'AuthError';
   }
 }
+
+/**
+ * 412 / 422 — l'API a rejeté le payload. Porte la liste d'erreurs serveur
+ * pour que le sync engine la stocke dans `intervention.sync_error_message`.
+ * Les codes/details exacts dépendent d'Ekylibre v2 ; on capture ce qu'on peut
+ * et on garde le body brut en fallback (`body` hérité d'ApiError).
+ */
+export class ValidationError extends ApiError {
+  public readonly errors: string[];
+
+  constructor(status: number, message: string, errors: string[] = [], body?: string) {
+    super(status, message, body);
+    this.name = 'ValidationError';
+    this.errors = errors;
+  }
+}

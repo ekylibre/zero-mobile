@@ -17,8 +17,8 @@ Read first, in order:
 3. `docs/workflow.md` — phased delivery plan (P0 → P8)
 4. `docs/P0-checklist.md` — external prerequisites (accounts, DSNs)
 
-The repo currently sits at the end of **P5 (spraying form)**.
-P6 (sync engine) is the next phase.
+The repo currently sits at the end of **P6 (sync engine)**.
+P7 (parcels map) is the next phase.
 
 ## Stack & non-obvious choices
 
@@ -102,24 +102,39 @@ docs/                         # Brainstorm, architecture, workflow, P0 checklist
 
 ## Sync model — read before touching `src/core/sync`
 
-The architecture (`docs/architecture.md` §6) splits sync into two halves:
+The architecture (`docs/architecture.md` §6) splits sync into two halves.
+P6 deviates from the original design on the pull side (we reuse
+`runInitialSync` instead of writing a `synchronize()` adapter) — the
+push side follows ADR-03 verbatim.
 
-- **Pull catalogue** uses `WatermelonDB.synchronize({ pullChanges })`
-  with `pushChanges` neutralised. The adapter does a full fetch of
-  `/procedures`, `/products`, `/cultivable_zones`, `/variants`,
-  `/interventions` and computes the diff client-side (acceptable while
-  farms stay below ~500 parcels / ~1k products — see open question #4
-  in architecture.md §11).
-- **Push interventions** is a dedicated loop _outside_ `synchronize()`,
-  iterating over `interventions WHERE sync_state IN (pending, error)`.
-  Each intervention is POSTed (or PUT-ed if `server_id` is set) with
-  its `client_uuid` echoed in `provider.id`. Per-intervention success
-  marks the row `synced`; 4xx marks `error` with the server message;
-  5xx/network bumps `sync_attempt_count` and leaves it `pending` for
-  the next cycle.
+- **Pull catalogue** reuses `runInitialSync(api, database)` from
+  `src/features/catalog/initial-sync.ts`. The function is idempotent
+  and resumable, so calling it on every Sync tap is safe. Each table
+  does a full fetch + client-side diff (acceptable while farms stay
+  below ~500 parcels / ~1k products — open question #4 in
+  architecture.md §11).
+- **Push interventions** is a dedicated loop in
+  `src/core/sync/push-engine.ts`, iterating over
+  `interventions WHERE sync_state IN (pending, error, syncing)`. Each
+  intervention is POSTed (or PUT-ed if `server_id` is set) with its
+  `client_uuid` echoed in `provider.id`. Per-intervention success marks
+  the row `synced`; 4xx marks `error` with the server message;
+  5xx/network bumps `sync_attempt_count` and leaves it `pending` for the
+  next cycle. AuthError propagates so AuthContext can purge the session.
+- **Orchestration** is `runSyncCycle({ database, api, buildProvider,
+onPhase? })` in `src/core/sync/sync-cycle.ts`. Pull → push, in that
+  order. **Pull failure does not block push** (lookups come from local
+  WDB, robust to a stale catalogue).
+- **UI entry point** is the `useSyncCycle()` hook in
+  `src/core/sync/use-sync-cycle.ts`. The hook owns the anti-réentrance
+  lock (a 2nd `startSync` while one is running returns `null`).
+  Triggered by the "Synchroniser" button + pull-to-refresh on the
+  interventions list, and by "Réessayer" on the detail screen.
 
 If you find yourself routing `pushChanges` through `synchronize()`,
-re-read ADR-03 first.
+re-read ADR-03 first. If you find yourself reimplementing the catalogue
+diff outside `runInitialSync`, ask first — the current reuse is a
+conscious choice (P6 entry in CHANGELOG).
 
 ## When you change deps
 
@@ -238,25 +253,51 @@ changes that touch deps or `app.json` plugins.
   doesn't have a `datetime` mode so `DateTimeField` chains date →
   time pickers automatically.
 
+## Sync engine — quick reference (P6)
+
+- **Single entry point**: `useSyncCycle().startSync()`. Don't call
+  `runSyncCycle` / `runPushCycle` directly from a route — the hook
+  owns the store updates and the anti-réentrance lock.
+- **Two-form push engine**: `runPushCyclePure(deps)` is the
+  testable core (no WDB), `runPushCycle({ database, api,
+buildProvider })` is the production wrapper. Tests target the pure
+  form. Production code uses the wrapper.
+- **Server ID lookups** are built per-cycle (one query per catalogue
+  table) and reused for all interventions in the cycle. Don't fetch
+  per-intervention.
+- **`MissingServerIdError`** = local reference whose product/zone
+  was deleted server-side. Marks the intervention `error` with a
+  user-actionable message; doesn't trigger a network call.
+- **Idempotence** is the open risk (architecture §11.1). The hook's
+  `useRef` lock prevents double-tap from the UI, but a server-side
+  ack lost on a flaky network would still cause a duplicate POST on
+  the next cycle if Ekylibre doesn't dedupe on `provider.id`. Bac à
+  sable test required before pilot — see CHANGELOG P6.4.
+- **Error message format**: `intervention.sync_error_message` stores
+  raw FR text, displayed verbatim by the detail screen. Engine helpers
+  format these in `src/core/sync/push-engine.ts`. Stay consistent
+  (no i18n keys here — domain-style raw strings).
+
 ## Where work currently stops
 
-End of P5. Concretely:
+End of P6. Concretely:
 
-- Login → initial-sync → tabs.
-- **Procedure picker** (`new.tsx`) — lists supported v1 procedures
-  (only `spraying`). Other procedures from the catalogue are
-  invisible by design.
-- **Spraying form** — fully usable: dates (native picker), parcel,
-  driver, sprayer, multi-row plant medicine inputs (product +
-  optional variant + quantity + handler + optional unit), free-text
-  notes. Save validates via Zod, persists locally as `pending`,
-  alerts success, returns to the list.
-- **Interventions list** : the just-saved spraying appears with a
-  `pending` badge and bumps the tab counter.
-- **Detail screen** : full layout (sections + retry button) — counts
-  on relations are now non-zero after a save.
-- Intervention sync engine, map — not yet implemented. They land in
-  P6–P8 (see `docs/workflow.md`).
-- **Not yet covered**: 1 E2E Maestro/Detox scenario (workflow §6
-  quality gate, transverse §10.1) and a device demo with a panel
-  farmer for UX feedback on the multi-input row.
+- **Full offline → sync flow is jouable** end-to-end. Login →
+  initial-sync → list → "+ Nouvelle intervention" → procedure picker
+  → spraying form → save (`pending`). Tap "Synchroniser" (or
+  pull-to-refresh) → cycle pulling → pushing → row flips to `synced`
+  (green) or `error` (red, with persistent banner).
+- **Detail screen retry** is wired to the engine: tap "Réessayer" →
+  marks `pending` → triggers `startSync()` immediately.
+- **Logout warning** in Settings includes "N intervention(s) non
+  synchronisée(s) seront perdues" when `pendingCount > 0`.
+- **Catalogue map** (interactive parcel picker, MapLibre tiles) and
+  **pilot polish** — not yet implemented. They land in P7–P8 (see
+  `docs/workflow.md`).
+- **Not yet covered**:
+  - Bac à sable Ekylibre test for `provider.id` idempotence (see
+    CHANGELOG P6.4 — required before pilot).
+  - 1 E2E Maestro/Detox scenario covering login → save → sync →
+    server-side verification (workflow §10.1).
+  - Device demo on a real Ekylibre test instance to validate the
+    full flow with a panel farmer.

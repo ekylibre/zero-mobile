@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { Intervention, InterventionSyncState } from '@core/db/models';
 import { initI18n } from '@core/i18n';
 
-import { InterventionsListView } from '../InterventionsListView';
+import { InterventionsListView, type InterventionsListViewProps } from '../InterventionsListView';
 
 initI18n();
 
@@ -21,9 +21,30 @@ function makeIntervention(
   return base as unknown as Intervention;
 }
 
-describe('InterventionsListView', () => {
-  const noop = jest.fn();
+const noop = jest.fn();
 
+function defaultProps(
+  overrides: Partial<InterventionsListViewProps> = {},
+): InterventionsListViewProps {
+  return {
+    interventions: [],
+    procedureLabels: new Map(),
+    pendingCount: 0,
+    errorCount: 0,
+    syncStatus: 'idle',
+    syncError: null,
+    syncBusy: false,
+    lastSyncAt: null,
+    refreshing: false,
+    onRefresh: noop,
+    onSync: noop,
+    onItemPress: noop,
+    onNew: noop,
+    ...overrides,
+  };
+}
+
+describe('InterventionsListView', () => {
   beforeEach(() => {
     noop.mockClear();
   });
@@ -36,27 +57,12 @@ describe('InterventionsListView', () => {
     ];
     const labels = new Map([['spraying', 'Pulvérisation']]);
 
-    render(
-      <InterventionsListView
-        interventions={interventions}
-        procedureLabels={labels}
-        pendingCount={2}
-        refreshing={false}
-        onRefresh={noop}
-        onItemPress={noop}
-        onNew={noop}
-      />,
-    );
+    render(<InterventionsListView {...defaultProps({ interventions, procedureLabels: labels })} />);
 
-    // 3 lignes de la liste, chacune avec son testID
     expect(screen.getByTestId('intervention-row-a')).toBeOnTheScreen();
     expect(screen.getByTestId('intervention-row-b')).toBeOnTheScreen();
     expect(screen.getByTestId('intervention-row-c')).toBeOnTheScreen();
-
-    // Le label de la procédure est résolu via la map
     expect(screen.getAllByText('Pulvérisation').length).toBeGreaterThanOrEqual(3);
-
-    // Les badges affichent les libellés FR (1 par ligne)
     expect(screen.getByText('Synchronisée')).toBeOnTheScreen();
     expect(screen.getByText('À synchroniser')).toBeOnTheScreen();
     expect(screen.getByText('Erreur')).toBeOnTheScreen();
@@ -65,13 +71,10 @@ describe('InterventionsListView', () => {
   it('affiche le bandeau "N à synchroniser" quand pendingCount > 0', () => {
     render(
       <InterventionsListView
-        interventions={[makeIntervention({ id: 'a', syncState: 'pending' })]}
-        procedureLabels={new Map()}
-        pendingCount={2}
-        refreshing={false}
-        onRefresh={noop}
-        onItemPress={noop}
-        onNew={noop}
+        {...defaultProps({
+          interventions: [makeIntervention({ id: 'a', syncState: 'pending' })],
+          pendingCount: 2,
+        })}
       />,
     );
 
@@ -82,13 +85,10 @@ describe('InterventionsListView', () => {
   it('singularise correctement le bandeau pour 1 intervention', () => {
     render(
       <InterventionsListView
-        interventions={[makeIntervention({ id: 'a', syncState: 'pending' })]}
-        procedureLabels={new Map()}
-        pendingCount={1}
-        refreshing={false}
-        onRefresh={noop}
-        onItemPress={noop}
-        onNew={noop}
+        {...defaultProps({
+          interventions: [makeIntervention({ id: 'a', syncState: 'pending' })],
+          pendingCount: 1,
+        })}
       />,
     );
 
@@ -96,16 +96,12 @@ describe('InterventionsListView', () => {
     expect(screen.queryByText(/interventions à/)).toBeNull();
   });
 
-  it('cache le bandeau quand pendingCount = 0', () => {
+  it('cache le bandeau pending quand pendingCount = 0', () => {
     render(
       <InterventionsListView
-        interventions={[makeIntervention({ id: 'a', syncState: 'synced' })]}
-        procedureLabels={new Map()}
-        pendingCount={0}
-        refreshing={false}
-        onRefresh={noop}
-        onItemPress={noop}
-        onNew={noop}
+        {...defaultProps({
+          interventions: [makeIntervention({ id: 'a', syncState: 'synced' })],
+        })}
       />,
     );
 
@@ -115,17 +111,7 @@ describe('InterventionsListView', () => {
   it("affiche l'EmptyState quand la liste est vide, avec le CTA", () => {
     const onNew = jest.fn();
 
-    render(
-      <InterventionsListView
-        interventions={[]}
-        procedureLabels={new Map()}
-        pendingCount={0}
-        refreshing={false}
-        onRefresh={noop}
-        onItemPress={noop}
-        onNew={onNew}
-      />,
-    );
+    render(<InterventionsListView {...defaultProps({ onNew })} />);
 
     expect(screen.getByText("Aucune intervention pour l'instant.")).toBeOnTheScreen();
     expect(screen.queryByTestId('interventions-new-fab')).toBeNull();
@@ -138,17 +124,7 @@ describe('InterventionsListView', () => {
     const onItemPress = jest.fn();
     const target = makeIntervention({ id: 'b', syncState: 'pending' });
 
-    render(
-      <InterventionsListView
-        interventions={[target]}
-        procedureLabels={new Map()}
-        pendingCount={1}
-        refreshing={false}
-        onRefresh={noop}
-        onItemPress={onItemPress}
-        onNew={noop}
-      />,
-    );
+    render(<InterventionsListView {...defaultProps({ interventions: [target], onItemPress })} />);
 
     fireEvent.press(screen.getByTestId('intervention-row-b'));
     expect(onItemPress).toHaveBeenCalledWith(target);
@@ -159,17 +135,79 @@ describe('InterventionsListView', () => {
 
     render(
       <InterventionsListView
-        interventions={[makeIntervention({ id: 'a', syncState: 'synced' })]}
-        procedureLabels={new Map()}
-        pendingCount={0}
-        refreshing={false}
-        onRefresh={noop}
-        onItemPress={noop}
-        onNew={onNew}
+        {...defaultProps({
+          interventions: [makeIntervention({ id: 'a', syncState: 'synced' })],
+          onNew,
+        })}
       />,
     );
 
     fireEvent.press(screen.getByTestId('interventions-new-fab'));
     expect(onNew).toHaveBeenCalledTimes(1);
+  });
+
+  // ---- P6.4 : header sync + bandeaux d'erreur ----
+
+  it('affiche le header sync avec status idle et "jamais synchronisé"', () => {
+    render(<InterventionsListView {...defaultProps()} />);
+
+    expect(screen.getByTestId('sync-header')).toBeOnTheScreen();
+    expect(screen.getByText('Prêt')).toBeOnTheScreen();
+    expect(screen.getByText(/Jamais synchronisé/i)).toBeOnTheScreen();
+    expect(screen.getByTestId('sync-button')).toBeOnTheScreen();
+  });
+
+  it('reflète le syncStatus dans le header (pulling, pushing, error)', () => {
+    const { rerender } = render(
+      <InterventionsListView {...defaultProps({ syncStatus: 'pulling' })} />,
+    );
+    expect(screen.getByText(/Téléchargement du catalogue/i)).toBeOnTheScreen();
+
+    rerender(<InterventionsListView {...defaultProps({ syncStatus: 'pushing' })} />);
+    expect(screen.getByText(/Envoi des interventions/i)).toBeOnTheScreen();
+
+    rerender(<InterventionsListView {...defaultProps({ syncStatus: 'error' })} />);
+    expect(screen.getByText(/Échec de la synchronisation/i)).toBeOnTheScreen();
+  });
+
+  it('affiche le timestamp formaté quand lastSyncAt est fourni', () => {
+    const at = new Date('2026-04-12T08:30:00Z').getTime();
+    render(<InterventionsListView {...defaultProps({ lastSyncAt: at })} />);
+    expect(screen.getByText(/Dernière sync/i)).toBeOnTheScreen();
+  });
+
+  it('appelle onSync au tap sur le bouton Synchroniser', () => {
+    const onSync = jest.fn();
+    render(<InterventionsListView {...defaultProps({ onSync })} />);
+
+    fireEvent.press(screen.getByTestId('sync-button'));
+    expect(onSync).toHaveBeenCalledTimes(1);
+  });
+
+  it('désactive le bouton Synchroniser quand syncBusy=true', () => {
+    render(<InterventionsListView {...defaultProps({ syncBusy: true })} />);
+
+    const button = screen.getByTestId('sync-button');
+    expect(button.props.accessibilityState?.disabled).toBe(true);
+  });
+
+  it("affiche le bandeau d'erreur persistant quand errorCount > 0", () => {
+    render(<InterventionsListView {...defaultProps({ errorCount: 3 })} />);
+
+    expect(screen.getByTestId('error-banner')).toBeOnTheScreen();
+    expect(screen.getByText(/3 interventions en erreur/i)).toBeOnTheScreen();
+  });
+
+  it("singularise le bandeau d'erreur pour 1 intervention", () => {
+    render(<InterventionsListView {...defaultProps({ errorCount: 1 })} />);
+
+    expect(screen.getByText(/1 intervention en erreur/i)).toBeOnTheScreen();
+  });
+
+  it('affiche le bandeau de syncError quand fourni (échec de cycle)', () => {
+    render(<InterventionsListView {...defaultProps({ syncError: 'Catalogue : offline' })} />);
+
+    expect(screen.getByTestId('sync-error-banner')).toBeOnTheScreen();
+    expect(screen.getByText('Catalogue : offline')).toBeOnTheScreen();
   });
 });

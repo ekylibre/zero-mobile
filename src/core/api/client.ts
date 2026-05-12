@@ -1,5 +1,6 @@
 import {
   cultivableZoneListSchema,
+  interventionDtoSchema,
   interventionListSchema,
   procedureListSchema,
   productListSchema,
@@ -11,8 +12,13 @@ import {
   type ProductDto,
   type VariantDto,
 } from './dtos';
-import { ApiError, AuthError, NetworkError } from './errors';
-import type { Credentials, TokenResponse } from './types';
+import { ApiError, AuthError, NetworkError, ValidationError } from './errors';
+import type {
+  CreateInterventionPayload,
+  Credentials,
+  TokenResponse,
+  UpdateInterventionPayload,
+} from './types';
 
 type FetchImpl = typeof fetch;
 type UnauthorizedHandler = () => void;
@@ -174,6 +180,74 @@ export class EkylibreApiClient {
     const raw = await this.request<unknown>(path);
     return interventionListSchema.parse(raw);
   }
+
+  // ---- Endpoints intervention write (P6) ----
+
+  /**
+   * POST /api/v2/interventions. Le `provider.id` (UUIDv4 client) doit être
+   * présent dans le payload pour permettre l'idempotence (ADR-13).
+   * 422/412 → ValidationError avec `errors` (parsés du body) pour stockage
+   * dans `intervention.sync_error_message`.
+   */
+  async createIntervention(payload: CreateInterventionPayload): Promise<InterventionDto> {
+    const raw = await this.requestWithValidation('/api/v2/interventions', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return interventionDtoSchema.parse(raw);
+  }
+
+  /**
+   * PUT /api/v2/interventions/{server_id}. Utilisé pour les éditions
+   * d'interventions déjà connues serveur-side. Le `provider` peut être
+   * omis (il a été posé au POST initial).
+   */
+  async updateIntervention(
+    serverId: number,
+    payload: UpdateInterventionPayload,
+  ): Promise<InterventionDto> {
+    const raw = await this.requestWithValidation(`/api/v2/interventions/${serverId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    return interventionDtoSchema.parse(raw);
+  }
+
+  /**
+   * Wrapper autour de `request<T>` qui transforme les 412/422 en
+   * ValidationError dédiée. Garde tout le reste du flux (401, 5xx, réseau)
+   * inchangé.
+   */
+  private async requestWithValidation(path: string, init: RequestInit): Promise<unknown> {
+    try {
+      return await this.request<unknown>(path, init);
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 422 || e.status === 412)) {
+        throw new ValidationError(e.status, e.message, extractErrors(e.body), e.body);
+      }
+      throw e;
+    }
+  }
+}
+
+function extractErrors(body: string | undefined): string[] {
+  if (!body) return [];
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (!parsed || typeof parsed !== 'object') return [];
+    const errors = (parsed as { errors?: unknown }).errors;
+    if (Array.isArray(errors)) {
+      return errors.filter((x): x is string => typeof x === 'string');
+    }
+    if (errors && typeof errors === 'object') {
+      return Object.values(errors as Record<string, unknown>)
+        .flat()
+        .filter((x): x is string => typeof x === 'string');
+    }
+  } catch {
+    // body pas JSON → on retombe sur la chaîne brute (déjà dans ApiError.body).
+  }
+  return [];
 }
 
 async function safeText(response: Response): Promise<string | undefined> {

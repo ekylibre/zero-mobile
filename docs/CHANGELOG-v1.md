@@ -8,7 +8,174 @@ non-générées.
 
 ### En cours
 
-- P6 — Sync engine (à venir)
+- P7 — Carte des parcelles (à venir)
+
+## P6 — Sync engine
+
+Livré en 4 sous-tranches (P6.1 → P6.4). Le moteur de sync push interventions
+suit ADR-03 (boucle dédiée par intervention, pas `synchronize().pushChanges`)
+et le pull catalogue réutilise `runInitialSync` (idempotent, choix tranché
+au démarrage de la phase).
+
+### P6.1 — Payload-builder + extension API client
+
+**Fait** :
+
+- Types payload (`src/core/api/types.ts`) — `ProviderTag`,
+  `WorkingPeriodAttribute`, `DoerAttribute`, `InputAttribute`,
+  `TargetAttribute`, `ToolAttribute`, `CreateInterventionPayload`,
+  `UpdateInterventionPayload`. Conformes à l'architecture §4.
+- Nouvelle classe `ValidationError extends ApiError`
+  (`src/core/api/errors.ts`) qui porte `errors: string[]` parsés du body,
+  pour stockage dans `intervention.sync_error_message` (cf. matrice §4).
+- `src/core/sync/payload-builder.ts` —
+  `buildCreateInterventionPayload(data, lookups, provider)` pur. Mappe
+  les IDs locaux WDB vers les `server_id` Ekylibre via `ServerIdLookups`
+  (productById / zoneById / variantById). `MissingServerIdError` clean
+  si une référence est introuvable (cas catalogue serveur modifié après
+  la saisie — produit retiré, parcelle supprimée). Synthétise une
+  working_period depuis les dates si la liste est vide. **Targets sortent
+  en `product_id`** (les cultivable_zones partagent l'espace d'IDs des
+  produits côté Ekylibre v2 — cf. arch §4).
+- `EkylibreApiClient.createIntervention(payload)` (POST) +
+  `updateIntervention(serverId, payload)` (PUT). Wrapper privé
+  `requestWithValidation` qui transforme `ApiError(412|422)` en
+  `ValidationError`. Helper `extractErrors(body)` qui supporte le format
+  `errors: string[]` ET `errors: { field: string[] }`.
+- Tests : 33 nouveaux (11 payload-builder + 22 API client extension).
+
+### P6.2 — Push loop + Zustand store + provider tag
+
+**Fait** :
+
+- `src/core/sync/store.ts` — Zustand store du cycle : `status`
+  (idle/pulling/pushing/error), `lastError`, `lastSyncAt`. Actions :
+  `setStatus`, `setError`, `markCompleted`, `reset`. **`pendingCount`
+  reste observable via `usePendingInterventionCount()` existant** —
+  pas dupliqué dans le store (la source de vérité = WDB).
+- `src/core/sync/provider-tag.ts` — `buildProviderTag(uuid, deviceInfo)`
+  pur + `getDeviceInfo()` qui lit `Constants.expoConfig.version` +
+  `Platform.OS` + `i18n.language`. `device_model` laissé `undefined`
+  en v1 (pas de `expo-device` ; à ajouter si Sentry/Ekylibre en a
+  besoin pour le triage pilote).
+- `src/core/sync/push-engine.ts` — exposé sous **deux formes** :
+  - **`runPushCyclePure(deps)`** — testable sans WDB. Itère les
+    `tasks: InterventionPushTask[]` (intervention + relations
+    pré-fetchées), produit un `PushOutcome` (`synced` / `error` /
+    `retry`) via le callback `applyOutcome`. AuthError remonte (laisse
+    l'auth handler purger). Optionally calls `markSyncing` avant
+    chaque push.
+  - **`runPushCycle({ database, api, buildProvider })`** — wrapper
+    production qui glue WDB : query
+    `sync_state IN (pending, error, syncing)` (le `syncing` capture
+    les cycles crashés), fetch lookups, fetch relations par
+    intervention, applique les outcomes via `database.write` +
+    `intervention.update(...)`.
+- **Matrice de gestion d'erreurs (alignée arch §4)** :
+  | Erreur | sync_state | sync_error_message | sync_attempt_count |
+  | --- | --- | --- | --- |
+  | 200/201 | synced | `null` | inchangé |
+  | 422/412 ValidationError | error | errors joints `\n` | inchangé |
+  | MissingServerIdError | error | « Référence X introuvable… » | inchangé |
+  | 5xx ApiError | pending | « Erreur serveur (N)… » | +1 |
+  | NetworkError | pending | « Connexion perdue… » | +1 |
+  | 401 AuthError | — | — | (cycle interrompu, auth purge) |
+- Tests : 24 nouveaux (13 push-engine + 7 store + 4 provider-tag).
+
+### P6.3 — Orchestrateur cycle complet
+
+**Fait** :
+
+- `src/core/sync/sync-cycle.ts` — `runSyncCycle({ database, api,
+buildProvider, onPhase? })`. Pull (réutilise `runInitialSync` —
+  idempotent, resumable) puis push (`runPushCycle`). Renvoie un
+  `SyncCycleReport` complet (`pullOk`, `pullError`, `pushReport`,
+  `pushError`).
+- **Pull failure ≠ stop push** : si la sync catalogue échoue (réseau
+  down après que des interventions ont été saisies), on tente quand
+  même le push. Les lookups push viennent de la base locale, pas du
+  fetch du jour — donc robuste à un catalogue stale.
+- AuthError remonte tel quel depuis pull comme depuis push. Le reste
+  est encodé dans le report : pas d'exception en sortie, le caller
+  décide de l'affichage.
+- `onPhase` callback au lieu d'un coupling direct au store : la route
+  fait `(phase) => useSyncStore.getState().setStatus(phase)`. Garde
+  le moteur testable sans Zustand.
+- Tests : 10 nouveaux.
+
+### P6.4 — UI wiring
+
+**Fait** :
+
+- `useSyncCycle()` hook (`src/core/sync/use-sync-cycle.ts`) — wrap
+  `runSyncCycle` + store. Expose `{ startSync, status, lastError,
+lastSyncAt, isBusy }`. **Lock anti-réentrance** via `useRef`
+  (un 2e tap pendant le 1er cycle retourne `null` sans rien
+  déclencher — protection critique vu que l'idempotence Ekylibre n'est
+  pas encore vérifiée bac à sable, cf. risques majeurs ci-dessous).
+- `useErrorInterventionCount()` hook — observable count des
+  interventions en `sync_state='error'` pour le bandeau persistant.
+- `InterventionsListView` étendu :
+  - Header sync (status, dernière sync, bouton « Synchroniser »).
+  - Bandeau d'erreur persistant (errorCount > 0).
+  - Bandeau syncError (échec global de cycle).
+  - Bandeau pending (existant P4).
+  - Pull-to-refresh **wired sur le vrai cycle** (le placeholder
+    400 ms de P4 est supprimé).
+- `app/(tabs)/interventions/[id].tsx` — bouton « Réessayer » marque
+  `pending` puis déclenche `startSync()` immédiatement (au lieu
+  d'attendre le prochain tap manuel comme en P4 placeholder).
+  Disabled pendant `syncBusy`.
+- `app/(tabs)/settings.tsx` — Alert de logout inclut « N
+  intervention(s) non synchronisée(s) seront perdues » quand
+  `pendingCount > 0` (cf. brainstorm §6 — la déconnexion purge les
+  tables WDB locales).
+- i18n : bloc `interventions.list.{syncAction,syncStatus.*,
+errorBanner_*,lastSyncAt,lastSyncNever}` + `settings.logoutPendingWarning_*`.
+- Tests : 13 nouveaux (10 list view P6.4 + 5 use-sync-cycle).
+
+**Action requise après cette phase** :
+
+- ⚠️ **Test bac à sable Ekylibre pour confirmer l'idempotence sur
+  `provider.id`** — décision « trust + warn » prise au démarrage de
+  P6 (cf. risques majeurs workflow §6). Le lock anti-réentrance dans
+  `useSyncCycle` protège du double-tap UI mais **pas** du cas
+  « POST réussi côté serveur, ack perdu côté client » : si le serveur
+  ne dédoublonne pas sur `provider.id`, un retry au prochain cycle
+  créera un doublon. À tester sur instance de test avant le 1er
+  pilote ; si KO, ajouter un `GET /interventions?provider_id=<uuid>`
+  défensif avant chaque POST (latence x2 mais sûreté garantie).
+
+**Points de vigilance** :
+
+- Le champ `actions: []` envoyé dans le payload est **non documenté**
+  côté Ekylibre v2. Les premiers POSTs en bac à sable diront si
+  l'API exige une valeur précise (probablement liée à la définition
+  XML de la procédure spraying). À enrichir en v1.5+ quand on aura
+  accès aux définitions.
+- Le push-engine n'est pas exercé en intégration WDB en test (c'est
+  la 3e itération du même point — cf. P3, P5). On teste la logique
+  via `runPushCyclePure` et le glue WDB est validé manuellement +
+  via démo. À convertir en E2E Maestro/Detox dès qu'un device CI
+  est dispo (workstream §10.1).
+- Le pull catalogue réutilise `runInitialSync` (full fetch + diff
+  client-side) à chaque cycle. **Hypothèse « petite ferme »** —
+  si on dépasse les 1k produits / 500 parcelles, cette stratégie
+  devient coûteuse. À mesurer en pilote (cf. arch §11.3) ; bascule
+  vers `?modified_since=` côté Ekylibre si saturé.
+- Le format des erreurs Ekylibre v2 (422 body) est **présumé** :
+  on supporte `{ errors: [...] }` ET `{ errors: { field: [...] } }`.
+  Si la réponse réelle a une 3e forme, `extractErrors` retombe sur
+  le body brut (déjà accessible via `ApiError.body`). À vérifier
+  sur les premiers 422 pilote.
+- Le Zustand store v5 utilisé sans middleware (pas de devtools, pas
+  de persist). Si on veut survivre au reload de l'app pour
+  `lastSyncAt`/`lastError`, ajouter le middleware `persist` —
+  reporté à v1.5 si jugé utile.
+- Pas encore de UI sur l'écran de détail pour distinguer un sync
+  retryable (`pending` avec attempt > 0 + message) d'un brand-new
+  pending (attempt = 0). Le bandeau actuel suppose que l'utilisateur
+  reconnaît le contexte. À itérer si retour pilote négatif.
 
 ## P5 — Formulaire spraying
 

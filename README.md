@@ -4,17 +4,24 @@ Application mobile React Native pour Ekylibre. Permet la saisie
 d'interventions agricoles hors-ligne avec synchronisation vers
 Ekylibre via l'API REST v2.
 
-> **Statut** : fin de **P5 (formulaire spraying)**. Flux complet
-> jouable hors-ligne : login → téléchargement du catalogue → picker
-> de procédure → formulaire spraying (dates, parcelle, conducteur,
-> multi-intrants phyto, pulvérisateur, notes) → sauvegarde locale
-> en `pending` → apparition dans la liste avec son badge. Moteur
-> de sync interventions en P6, carte en P7, polish + pilote en P8.
+> **Statut** : fin de **P6 (sync engine)**. Flux complet hors-ligne →
+> sync jouable de bout en bout : login → catalogue → saisie spraying
+> hors-ligne → tap « Synchroniser » → cycle pull catalogue + push
+> interventions → bascule en `synced` ou `error` avec message serveur
+> visible dans le détail. Carte des parcelles en P7, polish + pilote
+> en P8.
 >
-> ⚠️ **Rebuild EAS dev client requis** après P5 — deux nouvelles
-> deps natives ajoutées (`expo-crypto`,
+> ⚠️ **Rebuild EAS dev client requis** depuis P5 — deux deps natives
+> ajoutées en P5 (`expo-crypto`,
 > `@react-native-community/datetimepicker`). En complément du
-> rebuild déjà nécessaire depuis P3 (WatermelonDB JSI).
+> rebuild déjà nécessaire depuis P3 (WatermelonDB JSI). P6 n'a pas
+> ajouté de dep native (Zustand est pure JS).
+>
+> ⚠️ **Avant le 1er pilote** : confirmer en bac à sable Ekylibre que
+> `provider.id` (UUID client) sert bien de clé d'idempotence côté
+> serveur — sinon, ajouter un GET défensif avant chaque POST. Cf.
+> [CHANGELOG P6.4](docs/CHANGELOG-v1.md#p64--ui-wiring) et
+> [arch §11.1](docs/architecture.md#11-limites-et-questions-ouvertes).
 
 ## Démarrer
 

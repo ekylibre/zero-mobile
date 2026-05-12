@@ -1,15 +1,23 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import type { Intervention } from '@core/db/models';
+import type { SyncStatus } from '@core/sync/store';
 import { EmptyState, InterventionListItem } from '@ui/index';
 
 export interface InterventionsListViewProps {
   interventions: Intervention[];
   procedureLabels: Map<string, string>;
   pendingCount: number;
+  errorCount: number;
+  syncStatus: SyncStatus;
+  syncError: string | null;
+  syncBusy: boolean;
+  lastSyncAt: number | null;
   refreshing: boolean;
   onRefresh: () => void;
+  onSync: () => void;
   onItemPress: (intervention: Intervention) => void;
   onNew: () => void;
 }
@@ -20,15 +28,63 @@ export function InterventionsListView({
   interventions,
   procedureLabels,
   pendingCount,
+  errorCount,
+  syncStatus,
+  syncError,
+  syncBusy,
+  lastSyncAt,
   refreshing,
   onRefresh,
+  onSync,
   onItemPress,
   onNew,
 }: InterventionsListViewProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const lastSyncLabel = useMemo(() => {
+    if (lastSyncAt == null) return t('interventions.list.lastSyncNever');
+    const formatter = new Intl.DateTimeFormat(i18n.language || 'fr', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return t('interventions.list.lastSyncAt', { time: formatter.format(new Date(lastSyncAt)) });
+  }, [lastSyncAt, t, i18n.language]);
 
   return (
     <View style={styles.container}>
+      <View style={styles.syncHeader} testID="sync-header">
+        <View style={styles.syncHeaderLeft}>
+          <Text style={styles.syncStatus}>{t(`interventions.list.syncStatus.${syncStatus}`)}</Text>
+          <Text style={styles.lastSync}>{lastSyncLabel}</Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onSync}
+          disabled={syncBusy}
+          style={({ pressed }) => [
+            styles.syncButton,
+            (pressed || syncBusy) && styles.syncButtonPressed,
+          ]}
+          testID="sync-button"
+        >
+          <Text style={styles.syncButtonText}>{t('interventions.list.syncAction')}</Text>
+        </Pressable>
+      </View>
+
+      {errorCount > 0 ? (
+        <View style={styles.errorBanner} accessibilityRole="alert" testID="error-banner">
+          <Text style={styles.errorBannerText}>
+            {t('interventions.list.errorBanner', { count: errorCount })}
+          </Text>
+        </View>
+      ) : null}
+
+      {syncError ? (
+        <View style={styles.syncErrorBanner} accessibilityRole="alert" testID="sync-error-banner">
+          <Text style={styles.syncErrorText}>{syncError}</Text>
+        </View>
+      ) : null}
+
       {pendingCount > 0 ? (
         <View style={styles.pendingBanner} accessibilityRole="alert" testID="pending-banner">
           <Text style={styles.pendingBannerText}>
@@ -85,6 +141,43 @@ export function InterventionsListView({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
+  syncHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomColor: '#eee',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+  },
+  syncHeaderLeft: { flex: 1 },
+  syncStatus: { fontSize: 13, color: '#444', fontWeight: '500' },
+  lastSync: { fontSize: 11, color: '#888', marginTop: 2 },
+  syncButton: {
+    backgroundColor: '#0066cc',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+  },
+  syncButtonPressed: { opacity: 0.6 },
+  syncButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  errorBanner: {
+    backgroundColor: '#fde6e6',
+    borderBottomColor: '#a3171c',
+    borderBottomWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  errorBannerText: { color: '#5a0c10', fontSize: 13, fontWeight: '500' },
+  syncErrorBanner: {
+    backgroundColor: '#fff0f0',
+    borderBottomColor: '#a3171c',
+    borderBottomWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  syncErrorText: { color: '#5a0c10', fontSize: 12 },
   pendingBanner: {
     backgroundColor: '#fff7e6',
     borderBottomColor: '#f0c36d',

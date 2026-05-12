@@ -5,19 +5,27 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '@core/auth/AuthContext';
+import { usePendingInterventionCount } from '@features/catalog/hooks';
 
 export default function SettingsScreen() {
   const { t } = useTranslation();
   const { state, logout } = useAuth();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
+  const pendingCount = usePendingInterventionCount();
 
   const version = Constants.expoConfig?.version ?? '0.0.0';
 
-  // Note P2 : pas d'avertissement « interventions non-syncées » ici.
-  // Sera ajouté en P6 une fois la table interventions branchée.
+  // Avertissement explicite si l'utilisateur s'apprête à perdre des
+  // interventions saisies hors-ligne et jamais synchronisées (cf. brainstorm
+  // §6 — la déconnexion purge les tables WDB locales).
   const handleLogoutPress = () => {
-    Alert.alert(t('settings.logoutConfirmTitle'), t('settings.logoutConfirmMessage'), [
+    const baseMessage = t('settings.logoutConfirmMessage');
+    const warning =
+      pendingCount > 0
+        ? `${baseMessage}\n\n${t('settings.logoutPendingWarning', { count: pendingCount })}`
+        : baseMessage;
+    Alert.alert(t('settings.logoutConfirmTitle'), warning, [
       { text: t('common.cancel'), style: 'cancel' },
       {
         text: t('settings.logoutConfirm'),

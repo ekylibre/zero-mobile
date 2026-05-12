@@ -90,6 +90,26 @@ export function usePendingInterventionCount(): number {
 }
 
 /**
+ * Compte les interventions en `error` uniquement (rejetées par le serveur).
+ * Distinct de `pending` (en attente de push). Utilisé pour le bandeau
+ * persistant « N intervention(s) en erreur » sur la liste (P6).
+ */
+export function useErrorInterventionCount(): number {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const collection = database.collections.get<Intervention>(Tables.interventions);
+    const subscription = collection
+      .query(Q.where('sync_state', 'error'))
+      .observeCount()
+      .subscribe(setCount);
+    return () => subscription.unsubscribe();
+  }, []);
+
+  return count;
+}
+
+/**
  * Récupère une procédure par son nom (clé naturelle, immuable).
  * Permet d'afficher le label FR à partir de `intervention.procedureName`.
  */
