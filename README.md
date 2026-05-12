@@ -4,13 +4,17 @@ Application mobile React Native pour Ekylibre. Permet la saisie
 d'interventions agricoles hors-ligne avec synchronisation vers
 Ekylibre via l'API REST v2.
 
-> **Statut** : fin de **P4 (liste & détail intervention)**. Login →
-> téléchargement du catalogue → liste vide en attendant P5, avec UI
-> complète (badges sync, pull-to-refresh placeholder, bandeau pending,
-> FAB nouvelle intervention, écran détail observable). Formulaire de
-> saisie en P5, moteur de sync interventions en P6, carte en P7.
+> **Statut** : fin de **P5 (formulaire spraying)**. Flux complet
+> jouable hors-ligne : login → téléchargement du catalogue → picker
+> de procédure → formulaire spraying (dates, parcelle, conducteur,
+> multi-intrants phyto, pulvérisateur, notes) → sauvegarde locale
+> en `pending` → apparition dans la liste avec son badge. Moteur
+> de sync interventions en P6, carte en P7, polish + pilote en P8.
 >
-> ⚠️ **Rebuild EAS dev client requis** depuis P3 (WatermelonDB en JSI).
+> ⚠️ **Rebuild EAS dev client requis** après P5 — deux nouvelles
+> deps natives ajoutées (`expo-crypto`,
+> `@react-native-community/datetimepicker`). En complément du
+> rebuild déjà nécessaire depuis P3 (WatermelonDB JSI).
 
 ## Démarrer
 

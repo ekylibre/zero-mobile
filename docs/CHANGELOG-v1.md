@@ -8,7 +8,165 @@ non-générées.
 
 ### En cours
 
-- P5 — Formulaire spraying (à venir)
+- P6 — Sync engine (à venir)
+
+## P5 — Formulaire spraying
+
+Livré en 4 sous-tranches (P5.1 → P5.3b) pour garder des PRs reviewables.
+
+### P5.1 — Domaine + UUID + persister
+
+**Fait** :
+
+- Wrapper UUID (`src/core/crypto/uuid.ts`) — `generateClientUuid()`
+  enrobe `expo-crypto.randomUUID()` dans un module dédié pour pouvoir
+  le mocker proprement dans les tests sans monkey-patcher la lib.
+- Schéma Zod du formulaire (`src/domain/procedures/spraying.ts`) —
+  conforme à l'architecture §7 : `procedure_name === 'spraying'`,
+  `started_at < stopped_at` (refine), doers ≥1 (`driver`), inputs ≥1
+  (`plant_medicine` avec `quantity_value > 0` finite + `quantity_handler`
+  non vide), targets length === 1 (`cultivation`), tools ≥1 (`sprayer`).
+  Messages FR en dur dans le domaine (la couche domaine n'a pas accès
+  à i18next ; v1 ne ship que le FR).
+- Persister (`src/features/intervention/persister.ts`) —
+  `persistSprayingIntervention(database, input, opts?)` : génère
+  `client_uuid` (figé pour la vie de l'intervention, cf. ADR-13),
+  calcule `whole/working_duration_seconds` depuis les dates, écrit
+  intervention + 1 working_period (`nature: 'intervention'`) + N doers
+  - N inputs + 1 target + N tools dans **une seule** `database.write` +
+    `database.batch(...)` (pattern aligné avec les catalog persisters).
+    Sortie : `{ interventionId, clientUuid }`. Description trim + null si
+    vide. `opts.generateUuid` permet l'injection de stub en test.
+- Tests : 21 cas Zod (happy path × 4 + invalidations × 17, couvre tous
+  les chemins du schéma) + 12 cas persister (1 transaction + 1 batch,
+  bon nombre d'opérations par table, FK `intervention_id` propagée,
+  champs métier persistés, défauts `sync_state='pending'` /
+  `syncAttemptCount=0`, `variantId`/`quantityUnit` à `null` si absents,
+  description trim/null, multi-rows). Le persister est testé via un
+  mock WDB qui capture les opérations (proxy sur `prepareCreate`).
+
+### P5.2 — Picker procédure + squelette formulaire
+
+**Fait** :
+
+- `ProcedurePickerView` (`src/features/intervention/`) — vue pure qui
+  reçoit la liste des procédures et filtre sur le set v1-supportées
+  (uniquement `spraying` à ce jour ; étendre quand on ouvrira d'autres
+  procédures). Tap d'un item → callback `onSelect(name)`. État vide.
+- Route `app/(tabs)/interventions/new.tsx` — `useProcedures()` +
+  `router.replace('/(tabs)/interventions/spraying')` au tap.
+  **`replace` plutôt que `push`** pour que le bouton retour ramène
+  directement à la liste, pas au picker (sinon back→picker→back =
+  app qui « patine »).
+- `SprayingFormView` (squelette) — RHF + `zodResolver`, structure des 6
+  sections (dates / target / doer / inputs / tool / description),
+  champ Notes pleinement utilisable, bouton « Enregistrer » qui
+  exécute la validation Zod (échoue donc avec un bandeau « formulaire
+  incomplet » en P5.2 puisque les sélecteurs ne sont pas encore là).
+- Route `app/(tabs)/interventions/spraying.tsx` — câblée sur le
+  persister de P5.1, `Alert` succès, `router.replace` retour liste,
+  `captureException` (Sentry) sur erreur.
+- `_layout.tsx` interventions — Stack.Screen `spraying` enregistré.
+- i18n — clés `interventions.new.{subtitle,empty,unsupported}` et bloc
+  `interventions.spraying.*` (sections, fields, save, errors).
+- Tests : 11 nouveaux (5 picker + 6 form skeleton).
+
+### P5.3a — Date pickers + 3 selects (parcelle, conducteur, pulvérisateur)
+
+**Fait** :
+
+- Dépendance ajoutée : `@react-native-community/datetimepicker@^9.1.0`
+  (compatible Expo SDK 54 via plugin officiel — native code,
+  ⚠️ rebuild EAS dev client requis ; cumulé avec celui d'`expo-crypto`
+  de P5.1).
+- Composants UI réutilisables (`src/ui/`) :
+  - `DateTimeField` — déclencheur affichant la valeur formatée +
+    picker natif au tap. iOS = overlay inline ; Android = pas de mode
+    `datetime` natif → on enchaîne `date` puis `time` automatiquement
+    pour rester cohérent avec l'API utilisateur.
+  - `SelectField<T>` — générique : label + valeur courante (ou
+    placeholder), tap ouvre une `Modal` avec `TextInput` de recherche
+    et `FlatList` filtrée case-insensitive. Checkmark sur l'item
+    sélectionné, état vide / no-results dédiés. **`SafeAreaView`
+    importé depuis `react-native-safe-area-context`**, pas de RN
+    (l'export RN est déprécié).
+- `SprayingFormView` mis à jour — `Controller` branche dates /
+  parcelle / conducteur / pulvérisateur. Pour les arrays mono-élément
+  (`targets`, `doers`, `tools`), la valeur sélectionnée est dérivée
+  via `find(id)` et `onChange` enveloppe l'item dans
+  `[{ ..., reference_name: '...' }]`. Subtitles : surface en ha pour
+  les parcelles, `variety` pour les pulvérisateurs.
+- Route `spraying.tsx` étendue — `useCultivableZones()`,
+  `useProductsByType('workers' | 'equipments')` injectés dans la vue.
+- i18n — bloc `select.*` (search hint, no-results, empty générique) +
+  `interventions.spraying.{fields,selects}.*` + `areaHectares`.
+- Tests : +13 (10 SelectField + 3 form steps wired). Existant adapté
+  pour passer les nouvelles props.
+
+### P5.3b — Multi-intrants phytosanitaires
+
+**Fait** :
+
+- `InputsFieldArray` (`src/features/intervention/`) — éditeur de liste
+  contrôlé (value/onChange depuis `Controller name="inputs"`). Une
+  ligne = `SelectField<Product>` produit + `SelectField<Variant>`
+  variante (optionnelle) + `TextInput` numérique quantité +
+  `SelectField<HandlerOption>` mesure + `TextInput` libre unité.
+  Boutons « Retirer » par ligne, « + Ajouter un intrant » global.
+  État vide propre quand `value.length === 0`.
+- Liste fixe v1 des handlers (`SPRAYING_HANDLERS`) :
+  `population` / `net_volume` / `net_mass` / `area_density`. Le
+  mapping handler-par-produit (cf. architecture §11) dépendra de la
+  définition XML des procédures (P-v1.5+) — en v1 on propose les 4
+  handlers les plus courants pour permettre la saisie.
+- Quantité — `keyboardType="decimal-pad"`, parsing tolérant
+  virgule/point (UX FR), fallback à 0 si saisie non numérique.
+- `SprayingFormView` — accepte `matters: Product[]` et
+  `variants: Variant[]`, branche `InputsFieldArray` via Controller.
+  Suppression du composant `Placeholder` interne devenu inutile.
+- Route `spraying.tsx` — `useProductsByType('matters')` +
+  `useVariants()` filtré sur `category === 'plant_medicine'`.
+- i18n — bloc `interventions.spraying.inputs.*` (titre ligne,
+  add/remove, labels et placeholders des 5 champs, états vide
+  produit/variante) + bloc `handlers.*` (4 labels FR).
+- Tests : +12 (11 InputsFieldArray + 1 form complet). Couvre add /
+  remove / multi-row / parsing décimal `,`/`.` / fallback non-numérique
+  / sélection produit-variant-handler / unit `undefined` quand vide.
+
+**Action requise après cette phase** :
+
+- ⚠️ **Rebuild EAS dev client requis** — deux nouvelles deps natives
+  ajoutées (`expo-crypto` en P5.1, `@react-native-community/datetimepicker`
+  en P5.3a). Lancer `pnpm build:dev:ios` / `pnpm build:dev:android`
+  avant le premier `pnpm start`.
+
+**Points de vigilance** :
+
+- WatermelonDB n'est toujours pas exercé en intégration : le persister
+  est testé via mock (capture des `prepareCreate` + `batch`). Une
+  validation device est nécessaire pour confirmer que le batch passe
+  bien (relations bien créées, FK respectées). Prévoir une démo P5
+  sur device avant d'attaquer P6.
+- La validation Zod est invoquée au submit uniquement
+  (`mode: 'onSubmit'`). Les erreurs par champ apparaissent après le
+  premier tap Save. Si l'UX devient brouillonne avec plusieurs
+  intrants, basculer sur `mode: 'onTouched'` côté `useForm`.
+- Les handlers de quantité sont une liste **fixe**. Si un produit
+  Ekylibre attend un handler hors set, l'utilisateur ne pourra pas
+  saisir et le push 422 côté serveur (P6) sera la première
+  manifestation. À surveiller en pilote.
+- Le picker de procédure est filtré sur `spraying` uniquement
+  (`SUPPORTED_PROCEDURES` dans `ProcedurePickerView`). Les autres
+  procédures du catalogue sont **invisibles** côté mobile en v1 ;
+  c'est volontaire (cf. brainstorm §3).
+- 1 scénario E2E Maestro/Detox (cf. workflow.md §6 quality gate)
+  **non encore livré** — chantier transverse §10.1, à attaquer dès
+  qu'un device permanent est disponible en CI.
+- Test harness pour composants contrôlés stateful : utiliser
+  `Object.assign(utils, { captured })` plutôt que
+  `{ ...utils, get value() {...} }` — le spread d'object literal
+  capture les valeurs au moment de la construction et casse la
+  réactivité du getter sur la closure mutable.
 
 ## P4 — Liste & détail intervention
 

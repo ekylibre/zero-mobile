@@ -8,6 +8,7 @@ export default function InterventionsLayout() {
     <Stack>
       <Stack.Screen name="index" options={{ title: t('interventions.list.title') }} />
       <Stack.Screen name="new" options={{ title: t('interventions.new.title') }} />
+      <Stack.Screen name="spraying" options={{ title: t('interventions.spraying.title') }} />
       <Stack.Screen name="[id]" options={{ title: t('interventions.detail.title') }} />
     </Stack>
   );

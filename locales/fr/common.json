@@ -8,6 +8,11 @@
     "back": "Retour",
     "ok": "OK"
   },
+  "select": {
+    "searchHint": "Rechercher…",
+    "noResults": "Aucun résultat.",
+    "empty": "Aucune entrée disponible."
+  },
   "tabs": {
     "interventions": "Interventions",
     "map": "Carte",
@@ -62,7 +67,67 @@
     },
     "new": {
       "title": "Nouvelle intervention",
-      "placeholder": "Le picker de procédure et le formulaire spraying seront livrés en P5."
+      "subtitle": "Choisissez le type d'intervention à enregistrer.",
+      "empty": "Aucune procédure disponible. Lancez une synchronisation depuis Paramètres.",
+      "unsupported": "Cette procédure n'est pas encore prise en charge sur mobile."
+    },
+    "spraying": {
+      "title": "Pulvérisation",
+      "sections": {
+        "dates": "Dates",
+        "target": "Parcelle cible",
+        "doer": "Conducteur",
+        "inputs": "Produits phytosanitaires",
+        "tool": "Pulvérisateur",
+        "description": "Notes"
+      },
+      "fields": {
+        "startedAt": "Début",
+        "stoppedAt": "Fin",
+        "target": "Parcelle",
+        "doer": "Conducteur",
+        "tool": "Pulvérisateur",
+        "description": "Notes complémentaires",
+        "descriptionPlaceholder": "Conditions, observations…"
+      },
+      "selects": {
+        "targetPlaceholder": "Choisir une parcelle…",
+        "doerPlaceholder": "Choisir un conducteur…",
+        "toolPlaceholder": "Choisir un pulvérisateur…",
+        "targetEmpty": "Aucune parcelle dans le catalogue. Synchronisez l'app.",
+        "doerEmpty": "Aucun conducteur dans le catalogue.",
+        "toolEmpty": "Aucun pulvérisateur dans le catalogue."
+      },
+      "inputs": {
+        "rowTitle": "Intrant {{index}}",
+        "addAction": "+ Ajouter un intrant",
+        "removeAction": "Retirer",
+        "empty": "Aucun intrant ajouté.",
+        "productLabel": "Produit",
+        "productPlaceholder": "Choisir un produit…",
+        "productEmpty": "Aucun produit phytosanitaire dans le catalogue.",
+        "variantLabel": "Variante (optionnelle)",
+        "variantPlaceholder": "Choisir une variante…",
+        "variantEmpty": "Aucune variante disponible.",
+        "quantityLabel": "Quantité",
+        "quantityPlaceholder": "0",
+        "handlerLabel": "Mesure",
+        "handlerPlaceholder": "Choisir une mesure…",
+        "unitLabel": "Unité (optionnel)",
+        "unitPlaceholder": "ex : l/ha"
+      },
+      "handlers": {
+        "population": "Population (unités)",
+        "net_volume": "Volume net (litres)",
+        "net_mass": "Masse nette (kg)",
+        "area_density": "Dose à l'hectare"
+      },
+      "areaHectares": "{{value}} ha",
+      "save": "Enregistrer l'intervention",
+      "saving": "Enregistrement…",
+      "saved": "Intervention enregistrée.",
+      "errorTitle": "Impossible d'enregistrer",
+      "errorIncomplete": "Le formulaire est incomplet. Vérifiez les champs ci-dessus."
     },
     "detail": {
       "title": "Détail de l'intervention",

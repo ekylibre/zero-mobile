@@ -17,8 +17,8 @@ Read first, in order:
 3. `docs/workflow.md` — phased delivery plan (P0 → P8)
 4. `docs/P0-checklist.md` — external prerequisites (accounts, DSNs)
 
-The repo currently sits at the end of **P4 (interventions list & detail)**.
-P5 (spraying form) is the next phase.
+The repo currently sits at the end of **P5 (spraying form)**.
+P6 (sync engine) is the next phase.
 
 ## Stack & non-obvious choices
 
@@ -127,7 +127,8 @@ re-read ADR-03 first.
   incompatibilities that `pnpm install` happily ignores.
 - If you bump Expo SDK, follow the official migration guide; don't
   hand-edit version numbers across `expo*` packages.
-- Adding a native dep (e.g. WatermelonDB in P3, MapLibre in P7)
+- Adding a native dep (e.g. WatermelonDB in P3, `expo-crypto` and
+  `@react-native-community/datetimepicker` in P5, MapLibre in P7)
   requires a new EAS dev build before `pnpm start` works on device.
 
 ## Auth — quick reference (P2)
@@ -183,7 +184,8 @@ changes that touch deps or `app.json` plugins.
 ## UI layering (P4)
 
 - **Reusable UI primitives** in `src/ui/` (badges, empty states,
-  list items). No router/DB dependency — these are pure components.
+  list items, `DateTimeField`, generic `SelectField<T>`). No
+  router/DB dependency — these are pure components.
 - **Feature views** (`src/features/<feature>/<View>.tsx`) take data
   as props. Connect via hooks in the route file
   (`app/(tabs)/<feature>/<route>.tsx`). This split keeps tests
@@ -195,15 +197,66 @@ changes that touch deps or `app.json` plugins.
   (400 ms timeout) until P6 wires the real sync engine. Don't add
   fake success messages — the user must learn that sync is coming.
 
+## Form patterns — quick reference (P5)
+
+- **RHF + zodResolver** — every form (login, spraying) wires Zod via
+  `@hookform/resolvers/zod`. Domain Zod schemas live under
+  `src/domain/` with FR error messages **in the schema** (the domain
+  layer doesn't have access to i18next, and v1 only ships FR).
+- **`Controller` for non-input fields** — `DateTimeField`,
+  `SelectField`, and `InputsFieldArray` are integrated via
+  `Controller`, not `register()`, because they're controlled
+  components with custom value/onChange shape.
+- **Single-element arrays** (`targets`, `doers`, `tools`) are stored
+  as length-0 or length-1 arrays in form state. The view derives the
+  selected item via `find(id)` and `onChange` wraps the item in
+  `[{ ..., reference_name: '...' }]`. This keeps the Zod schema
+  uniform (always an array) and the persister code simple.
+- **`InputsFieldArray`** is a controlled list editor (no
+  `useFieldArray`) — value/onChange propagate from the parent's
+  `Controller`. Add/remove rows mutate the array via
+  `onChange([...value, newRow])`. Quantity input parses both `,` and
+  `.` as decimal separator (FR UX), falls back to 0 on invalid input.
+- **Quantity handlers** are a fixed v1 set in
+  `src/features/intervention/InputsFieldArray.tsx`
+  (`SPRAYING_HANDLERS`). Per-product handler filtering depends on
+  procedure XML definitions and lands in P-v1.5+.
+- **Persistence path** — view collects validated data → route handler
+  calls `persistSprayingIntervention(database, input)` → 1
+  `database.write` + 1 `database.batch(...)` writes intervention +
+  all relations atomically. `client_uuid` is generated **once** at
+  creation via `expo-crypto.randomUUID()` and never regenerated (cf.
+  ADR-13).
+- **Stateful test harness** — when testing a controlled component,
+  wrap it in a `useState`-backed `Harness` and expose the captured
+  value via `Object.assign(utils, { captured })`. **Avoid**
+  `{ ...utils, get value() {...} }` — object literal spread captures
+  the getter's value at construction time and breaks reactivity on a
+  closure-mutated ref.
+- **Native picker deps** — `@react-native-community/datetimepicker`
+  needs an EAS dev rebuild. iOS gets the inline overlay; Android
+  doesn't have a `datetime` mode so `DateTimeField` chains date →
+  time pickers automatically.
+
 ## Where work currently stops
 
-End of P4. Concretely:
+End of P5. Concretely:
 
 - Login → initial-sync → tabs.
-- **Interventions list** : empty until P5 creates them, but the
-  rendering, badges, pending banner, FAB, and pull-to-refresh are
-  in place. Tab badge shows pending count.
-- **Detail screen** : full layout (sections + retry button)
-  observable, awaiting real intervention data.
-- Form, intervention sync engine, map — not yet implemented.
-  They land in P5–P8 (see `docs/workflow.md`).
+- **Procedure picker** (`new.tsx`) — lists supported v1 procedures
+  (only `spraying`). Other procedures from the catalogue are
+  invisible by design.
+- **Spraying form** — fully usable: dates (native picker), parcel,
+  driver, sprayer, multi-row plant medicine inputs (product +
+  optional variant + quantity + handler + optional unit), free-text
+  notes. Save validates via Zod, persists locally as `pending`,
+  alerts success, returns to the list.
+- **Interventions list** : the just-saved spraying appears with a
+  `pending` badge and bumps the tab counter.
+- **Detail screen** : full layout (sections + retry button) — counts
+  on relations are now non-zero after a save.
+- Intervention sync engine, map — not yet implemented. They land in
+  P6–P8 (see `docs/workflow.md`).
+- **Not yet covered**: 1 E2E Maestro/Detox scenario (workflow §6
+  quality gate, transverse §10.1) and a device demo with a panel
+  farmer for UX feedback on the multi-input row.

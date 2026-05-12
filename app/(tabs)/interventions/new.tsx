@@ -1,18 +1,26 @@
-import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useCallback } from 'react';
 
-// Placeholder P1 — picker de procédure (v1 = uniquement spraying) livré en P5.
+import { useProcedures } from '@features/catalog/hooks';
+import { ProcedurePickerView } from '@features/intervention/ProcedurePickerView';
+
 export default function NewInterventionScreen() {
-  const { t } = useTranslation();
+  const router = useRouter();
+  const procedures = useProcedures();
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{t('interventions.new.placeholder')}</Text>
-    </View>
+  // V1 = uniquement spraying. Au lieu d'une route paramétrée, on dispatche
+  // explicitement vers l'écran qui sait remplir le formulaire choisi.
+  // `replace` plutôt que `push` pour que le bouton retour ramène à la liste,
+  // pas au picker (sinon back → picker → back encore = retour à la liste,
+  // sensation d'app qui patine).
+  const onSelect = useCallback(
+    (procedureName: string) => {
+      if (procedureName === 'spraying') {
+        router.replace('/(tabs)/interventions/spraying');
+      }
+    },
+    [router],
   );
-}
 
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  title: { fontSize: 16, color: '#666' },
-});
+  return <ProcedurePickerView procedures={procedures} onSelect={onSelect} />;
+}
