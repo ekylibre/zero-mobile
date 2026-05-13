@@ -35,7 +35,7 @@
       "expo-router",
       "expo-localization",
       "expo-secure-store",
-      "@morrowdigital/watermelondb-expo-plugin",
+      "@lovesworking/watermelondb-expo-plugin-sdk-52-plus",
       [
         "expo-splash-screen",
         {
@@ -50,24 +50,26 @@
           "organization": "ekylibre",
           "project": "zero-mobile"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "updates": {
-      "url": "https://u.expo.dev/PLACEHOLDER-EAS-PROJECT-ID",
+      "url": "https://u.expo.dev/ecac56e1-11dc-4790-a0ac-57de88c66c85",
       "fallbackToCacheTimeout": 0
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "extra": {
+      "sentryDsn": "PLACEHOLDER_FILLED_BY_EAS_ENV",
+      "router": {},
       "eas": {
-        "projectId": "PLACEHOLDER-EAS-PROJECT-ID"
-      },
-      "sentryDsn": "PLACEHOLDER_FILLED_BY_EAS_ENV"
+        "projectId": "ecac56e1-11dc-4790-a0ac-57de88c66c85"
+      }
     },
-    "owner": "PLACEHOLDER-EXPO-ORG-SLUG"
+    "owner": "osfarm"
   }
 }

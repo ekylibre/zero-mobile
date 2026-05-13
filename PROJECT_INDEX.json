@@ -1,0 +1,332 @@
+{
+  "project": {
+    "name": "zero-mobile",
+    "version": "0.1.0",
+    "description": "App mobile React Native (Expo) Ekylibre. Capture spraying offline + sync REST v2.",
+    "status": "end of P6 (sync engine)",
+    "nextPhase": "P7 — carte des parcelles"
+  },
+  "stack": {
+    "runtime": { "node": ">=22.13", "pnpm": "10" },
+    "framework": "Expo SDK 54 + Expo Router v6",
+    "language": "TypeScript strict + noUncheckedIndexedAccess",
+    "uiKit": "react-native 0.83.6 + react 19.2",
+    "db": "WatermelonDB 0.28 (JSI, native)",
+    "forms": "react-hook-form 7 + zod 3",
+    "state": "Zustand 5 (sync) + WDB observables (domain)",
+    "i18n": "i18next 24 (FR seul ship en v1)",
+    "auth": "expo-secure-store (Keychain/Keystore)",
+    "observability": "@sentry/react-native 7"
+  },
+  "entryPoints": {
+    "appRoot": "app/_layout.tsx",
+    "splashRedirector": "app/index.tsx",
+    "login": "app/(auth)/login.tsx",
+    "initialSync": "app/(auth)/initial-sync.tsx",
+    "interventionsList": "app/(tabs)/interventions/index.tsx",
+    "spraying": "app/(tabs)/interventions/spraying.tsx",
+    "settings": "app/(tabs)/settings.tsx",
+    "apiClient": "src/core/api/client.ts (apiClient singleton)",
+    "database": "src/core/db/database.ts (database singleton)",
+    "syncHook": "src/core/sync/use-sync-cycle.ts (useSyncCycle)"
+  },
+  "modules": {
+    "core/api": {
+      "files": ["client.ts", "errors.ts", "types.ts", "dtos/"],
+      "exports": [
+        "EkylibreApiClient",
+        "apiClient",
+        "NetworkError",
+        "ApiError",
+        "AuthError",
+        "ValidationError",
+        "CreateInterventionPayload",
+        "UpdateInterventionPayload",
+        "ProviderTag"
+      ]
+    },
+    "core/auth": {
+      "files": ["AuthContext.tsx", "secure-storage.ts", "login-schema.ts"],
+      "exports": ["AuthProvider", "useAuth", "loginSchema"]
+    },
+    "core/crypto": {
+      "files": ["uuid.ts"],
+      "exports": ["generateClientUuid"]
+    },
+    "core/db": {
+      "files": ["schema.ts", "database.ts", "provider.tsx", "migrations.ts", "models/"],
+      "tables": [
+        "procedures",
+        "products",
+        "variants",
+        "cultivable_zones",
+        "interventions",
+        "intervention_doers",
+        "intervention_inputs",
+        "intervention_targets",
+        "intervention_tools",
+        "intervention_working_periods",
+        "sync_state"
+      ],
+      "exports": [
+        "database",
+        "Tables",
+        "schema",
+        "Procedure",
+        "Product",
+        "Variant",
+        "CultivableZone",
+        "Intervention",
+        "InterventionDoer",
+        "InterventionInput",
+        "InterventionTarget",
+        "InterventionTool",
+        "InterventionWorkingPeriod",
+        "SyncState",
+        "InterventionSyncState"
+      ]
+    },
+    "core/i18n": {
+      "files": ["index.ts"],
+      "exports": ["initI18n", "i18n"]
+    },
+    "core/observability": {
+      "files": ["sentry.ts"],
+      "exports": ["initSentry", "captureException", "captureMessage", "addBreadcrumb"]
+    },
+    "core/sync": {
+      "phase": "P6",
+      "files": [
+        "payload-builder.ts",
+        "provider-tag.ts",
+        "push-engine.ts",
+        "sync-cycle.ts",
+        "store.ts",
+        "use-sync-cycle.ts"
+      ],
+      "exports": [
+        "buildCreateInterventionPayload",
+        "MissingServerIdError",
+        "ServerIdLookups",
+        "buildProviderTag",
+        "getDeviceInfo",
+        "runPushCycle",
+        "runPushCyclePure",
+        "PushReport",
+        "PushOutcome",
+        "InterventionPushTask",
+        "runSyncCycle",
+        "SyncCycleReport",
+        "SyncPhase",
+        "useSyncStore",
+        "SyncStatus",
+        "useSyncCycle"
+      ]
+    },
+    "domain/mappers": {
+      "files": [
+        "procedure.ts",
+        "product.ts",
+        "variant.ts",
+        "cultivable-zone.ts",
+        "intervention.ts"
+      ],
+      "exports": [
+        "mapProcedureDto",
+        "mapProductDto",
+        "mapVariantDto",
+        "mapCultivableZoneDto",
+        "mapInterventionDto",
+        "ProcedureRow",
+        "ProductRow",
+        "VariantRow",
+        "CultivableZoneRow",
+        "InterventionReadRow"
+      ]
+    },
+    "domain/procedures": {
+      "files": ["spraying.ts"],
+      "exports": [
+        "sprayingInterventionSchema",
+        "SprayingIntervention",
+        "SprayingDoer",
+        "SprayingInput",
+        "SprayingTarget",
+        "SprayingTool"
+      ]
+    },
+    "features/catalog": {
+      "files": ["hooks.ts", "persisters.ts", "initial-sync.ts"],
+      "exports": [
+        "useProcedures",
+        "useProductsByType",
+        "useCultivableZones",
+        "useVariants",
+        "useInterventions",
+        "usePendingInterventionCount",
+        "useErrorInterventionCount",
+        "useSyncState",
+        "useInterventionById",
+        "useProcedureByName",
+        "persistProcedures",
+        "persistProductsForType",
+        "persistCultivableZones",
+        "persistVariants",
+        "getOrCreateSyncState",
+        "updateSyncState",
+        "runInitialSync",
+        "needsInitialSync",
+        "InitialSyncProgress"
+      ]
+    },
+    "features/intervention": {
+      "files": [
+        "persister.ts",
+        "ProcedurePickerView.tsx",
+        "SprayingFormView.tsx",
+        "InputsFieldArray.tsx",
+        "InterventionsListView.tsx"
+      ],
+      "exports": [
+        "persistSprayingIntervention",
+        "ProcedurePickerView",
+        "SprayingFormView",
+        "InputsFieldArray",
+        "SPRAYING_HANDLERS",
+        "InterventionsListView"
+      ]
+    },
+    "ui": {
+      "files": [
+        "DateTimeField.tsx",
+        "SelectField.tsx",
+        "SyncBadge.tsx",
+        "EmptyState.tsx",
+        "InterventionListItem.tsx",
+        "index.ts"
+      ],
+      "exports": ["DateTimeField", "SelectField", "SyncBadge", "EmptyState", "InterventionListItem"]
+    }
+  },
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "test": "jest",
+    "test:ci": "jest --ci --coverage",
+    "test:watch": "jest --watch",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "doctor": "expo-doctor",
+    "prebuild": "expo prebuild --clean",
+    "build:dev:ios": "eas build --profile development --platform ios",
+    "build:dev:android": "eas build --profile development --platform android",
+    "build:pilot": "eas build --profile pilot --platform all",
+    "submit:pilot": "eas submit --profile pilot --platform all"
+  },
+  "configFiles": {
+    "package.json": "Deps + scripts",
+    "app.json": "Expo config + plugins (PLACEHOLDER-* à remplacer)",
+    "eas.json": "Profils development | preview | pilot",
+    "tsconfig.json": "strict + noUncheckedIndexedAccess + path aliases",
+    "babel.config.js": "preset-expo + decorators legacy + worklets",
+    "metro.config.js": "Sentry source maps",
+    "jest.config.js": "preset jest-expo + moduleNameMapper",
+    "eslint.config.mjs": "flat config + Prettier",
+    ".npmrc": "node-linker=hoisted",
+    ".nvmrc": "Node 24"
+  },
+  "pathAliases": {
+    "@/*": "src/*",
+    "@core/*": "src/core/*",
+    "@features/*": "src/features/*",
+    "@domain/*": "src/domain/*",
+    "@ui/*": "src/ui/*"
+  },
+  "documentation": {
+    "README.md": "Statut + démarrage",
+    "CLAUDE.md": "Conventions + pièges + sync model + form patterns",
+    "PROJECT_INDEX.md": "Cet index",
+    "docs/brainstorm-requirements.md": "Vision et périmètre v1",
+    "docs/architecture.md": "13 ADRs + sync engine + schéma WDB + §11 questions ouvertes",
+    "docs/workflow.md": "Plan phasé P0 → P8",
+    "docs/P0-checklist.md": "Préreq externes (comptes, secrets)",
+    "docs/CHANGELOG-v1.md": "Journal de livraison phase par phase"
+  },
+  "testCoverage": {
+    "files": 23,
+    "tests": 199,
+    "command": "pnpm test",
+    "notTested": [
+      "Persisters catalog (intégration WDB) — tests via mocks uniquement",
+      "Persister intervention (intégration WDB) — idem",
+      "Push engine wrapper WDB — testé via runPushCyclePure + mocks",
+      "E2E (Maestro/Detox) — workflow §10.1, à attaquer dès qu'un device CI est dispo"
+    ]
+  },
+  "phases": [
+    { "id": "P0", "name": "Préreq externes", "status": "done" },
+    { "id": "P1", "name": "Bootstrap projet", "status": "done" },
+    { "id": "P2", "name": "Auth + API client", "status": "done" },
+    { "id": "P3", "name": "DB locale + catalogue", "status": "done" },
+    { "id": "P4", "name": "Liste & détail intervention", "status": "done" },
+    {
+      "id": "P5",
+      "name": "Formulaire spraying",
+      "subPhases": ["P5.1", "P5.2", "P5.3a", "P5.3b"],
+      "status": "done"
+    },
+    {
+      "id": "P6",
+      "name": "Sync engine",
+      "subPhases": ["P6.1", "P6.2", "P6.3", "P6.4"],
+      "status": "done"
+    },
+    { "id": "P7", "name": "Carte des parcelles", "status": "todo" },
+    { "id": "P8", "name": "Polish + pilote", "status": "todo" }
+  ],
+  "criticalADRs": {
+    "ADR-03": "Pull via synchronize() pullChanges, push via boucle dédiée per-intervention",
+    "ADR-13": "client_uuid figé envoyé en provider.id à chaque POST (idempotence)"
+  },
+  "openRisks": [
+    {
+      "id": "idempotence-ekylibre",
+      "ref": "arch §11.1, CHANGELOG P6.4",
+      "description": "provider.id idempotence non vérifiée bac à sable. Lock UI ≠ lock contre ack perdu réseau.",
+      "blockerFor": "premier pilote"
+    },
+    {
+      "id": "petite-ferme-hypothesis",
+      "ref": "arch §11.3",
+      "description": "Full fetch catalogue OK < 1k produits / 500 parcelles. À mesurer pilote."
+    },
+    {
+      "id": "actions-field",
+      "ref": "CHANGELOG P6.4",
+      "description": "actions: [] envoyé non documenté Ekylibre v2. Premiers POSTs en bac à sable diront."
+    },
+    {
+      "id": "format-422",
+      "ref": "CHANGELOG P6.4",
+      "description": "Format errors 422 présumé (2 formes supportées). Vérifier sur premiers 422 pilote."
+    },
+    {
+      "id": "e2e-missing",
+      "ref": "workflow §10.1",
+      "description": "1 scénario E2E Maestro/Detox manquant (login → save → sync → vérif serveur)."
+    }
+  ],
+  "nativeRebuildGate": {
+    "trigger": "Toute dep native ajoutée",
+    "history": [
+      { "phase": "P3", "deps": ["@nozbe/watermelondb", "@morrowdigital/watermelondb-expo-plugin"] },
+      { "phase": "P5.1", "deps": ["expo-crypto"] },
+      { "phase": "P5.3a", "deps": ["@react-native-community/datetimepicker"] }
+    ],
+    "command": "pnpm build:dev:ios && pnpm build:dev:android"
+  }
+}

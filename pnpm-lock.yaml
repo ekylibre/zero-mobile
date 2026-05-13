@@ -11,15 +11,15 @@ importers:
       '@hookform/resolvers':
         specifier: ^3.9.0
         version: 3.10.0(react-hook-form@7.75.0(react@19.2.0))
-      '@morrowdigital/watermelondb-expo-plugin':
-        specifier: ^2.3.3
-        version: 2.3.3
+      '@lovesworking/watermelondb-expo-plugin-sdk-52-plus':
+        specifier: ^1.0.3
+        version: 1.0.3
       '@nozbe/watermelondb':
         specifier: ^0.28.0
         version: 0.28.0
       '@react-native-community/datetimepicker':
-        specifier: ^9.1.0
-        version: 9.1.0(expo@55.0.23)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
+        specifier: ^8.6.0
+        version: 8.6.0(expo@55.0.23)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
       '@sentry/react-native':
         specifier: ^7.11.0
         version: 7.11.0(expo@55.0.23)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
@@ -1043,8 +1043,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@morrowdigital/watermelondb-expo-plugin@2.3.3':
-    resolution: {integrity: sha512-380NyK5fPEqBfWorqREc1zQkAuxITSN8cdf15TaOwAdbvIwjeF1TjvztUNC8eqJum0AHdU2xQLHMph3rndQtNQ==}
+  '@lovesworking/watermelondb-expo-plugin-sdk-52-plus@1.0.3':
+    resolution: {integrity: sha512-1sr/dg1T+EM1C6gWd9Mxtsut3Q2c9797d85WWEWijX1r0lgbuIjvXl4I8R59Oi/4bgpyAj20iSzKVClGbfhUVw==}
 
   '@napi-rs/wasm-runtime@0.2.12':
     resolution: {integrity: sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==}
@@ -1298,8 +1298,8 @@ packages:
       '@types/react':
         optional: true
 
-  '@react-native-community/datetimepicker@9.1.0':
-    resolution: {integrity: sha512-eadbnk+I2vxvW30iTAsm/qlCnMMAadkifIMYNEB2lzhxN/SvlKc7S2V4k5DyrwjdCbqdcMk3t9K6fnUMcAV34w==}
+  '@react-native-community/datetimepicker@8.6.0':
+    resolution: {integrity: sha512-yxPSqNfxgpGaqHQIpatqe6ykeBdU/1pdsk/G3x01mY2bpTflLpmVTLqFSJYd3MiZzxNZcMs/j1dQakUczSjcYA==}
     peerDependencies:
       expo: '>=52.0.0'
       react: '*'
@@ -6568,7 +6568,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@morrowdigital/watermelondb-expo-plugin@2.3.3': {}
+  '@lovesworking/watermelondb-expo-plugin-sdk-52-plus@1.0.3': {}
 
   '@napi-rs/wasm-runtime@0.2.12':
     dependencies:
@@ -6789,7 +6789,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.14
 
-  '@react-native-community/datetimepicker@9.1.0(expo@55.0.23)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)':
+  '@react-native-community/datetimepicker@8.6.0(expo@55.0.23)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)':
     dependencies:
       invariant: 2.2.4
       react: 19.2.0

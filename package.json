@@ -27,9 +27,9 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
-    "@morrowdigital/watermelondb-expo-plugin": "^2.3.3",
+    "@lovesworking/watermelondb-expo-plugin-sdk-52-plus": "^1.0.3",
     "@nozbe/watermelondb": "^0.28.0",
-    "@react-native-community/datetimepicker": "^9.1.0",
+    "@react-native-community/datetimepicker": "^8.6.0",
     "@sentry/react-native": "^7.11.0",
     "expo": "~55.0.0",
     "expo-constants": "~55.0.0",
