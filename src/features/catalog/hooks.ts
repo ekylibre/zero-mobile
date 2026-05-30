@@ -1,5 +1,5 @@
 import { Q, type Model } from '@nozbe/watermelondb';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { database } from '@core/db/database';
 import {
@@ -53,12 +53,37 @@ export function useProductsByType(productType: ApiProductType): Product[] {
   );
 }
 
+// Fenêtre d'1 an en millisecondes (cibles = cultures actives ou terminées il y
+// a moins d'un an).
+const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+
 export function useCultivableZones(): CultivableZone[] {
-  return useCollectionQuery<CultivableZone>(Tables.cultivableZones, [Q.sortBy('name', Q.asc)], []);
+  // On n'affiche que les parcelles/cultures pertinentes : `dead_at` null
+  // (active) OU fin de culture ≥ aujourd'hui − 1 an. Le seuil est figé au
+  // montage (suffisamment stable pour la durée d'une saisie).
+  const cutoff = useMemo(() => Date.now() - ONE_YEAR_MS, []);
+  return useCollectionQuery<CultivableZone>(
+    Tables.cultivableZones,
+    [Q.or(Q.where('dead_at', null), Q.where('dead_at', Q.gte(cutoff))), Q.sortBy('name', Q.asc)],
+    [cutoff],
+  );
 }
 
 export function useVariants(): Variant[] {
   return useCollectionQuery<Variant>(Tables.variants, [Q.sortBy('name', Q.asc)], []);
+}
+
+// Tous les produits (tous types confondus), pour résoudre les noms dans la vue
+// détail (doers/inputs/tools référencent un product_id local).
+export function useProductsAll(): Product[] {
+  return useCollectionQuery<Product>(Tables.products, [Q.sortBy('name', Q.asc)], []);
+}
+
+// Toutes les parcelles SANS le filtre `dead_at` : une intervention peut
+// référencer une parcelle dont la culture est terminée — on doit pouvoir la
+// résoudre dans le détail même si elle n'apparaît plus dans le picker.
+export function useCultivableZonesAll(): CultivableZone[] {
+  return useCollectionQuery<CultivableZone>(Tables.cultivableZones, [Q.sortBy('name', Q.asc)], []);
 }
 
 export function useInterventions(filter?: { syncState?: InterventionSyncState }): Intervention[] {

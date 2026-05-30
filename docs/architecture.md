@@ -511,9 +511,14 @@ un endpoint `?modified_since=` côté Ekylibre (point ouvert, cf. §11).
 - Si l'utilisateur tape « Synchroniser » deux fois sur une connexion
   flaky et que le premier POST a abouti côté serveur sans qu'on l'ait
   appris, le second POST avec le même `provider.id` doit être traité
-  comme un upsert côté Ekylibre. **Question ouverte : confirmer
-  qu'Ekylibre dédoublonne sur `provider.id`** (sinon, il faut
-  préfixer le push d'un GET pour vérifier).
+  comme un upsert côté Ekylibre.
+- **✅ RÉSOLU (2026-05-30, core)** : l'API v2 dédoublonne désormais sur
+  `(provider.vendor, provider.id)` — un 2ᵉ POST identique renvoie **`200`
+  avec le même `id`** (pas de doublon). Vérifié en bac à sable (cf.
+  testing-guide §2 / CHANGELOG P6.5). Le GET défensif envisagé est inutile.
+  ⚠️ Côté app : la réponse d'écriture POST/PUT est **`{ id }` seul** (pas le
+  DTO de lecture complet) → parser via `interventionWriteResultSchema`, sinon
+  le push échoue à tort (ZodError) et l'intervention reste « à synchroniser ».
 
 ## 7. Validation locale stricte (Zod)
 
@@ -629,6 +634,13 @@ flowchart LR
   `cultivable_zones.geometry_geojson`, tap → sélection de la cible.
 - **Pas d'édition de géométrie en v1** (cf. brainstorm).
 
+> ⚠️ **MAJ 2026-05-30** : la source des cibles est passée à
+> `products?product_type=land_parcels`, qui fournit `shape_svg` (SVG) **et non**
+> du GeoJSON. `geometry_geojson` est donc null pour l'instant et le détail
+> d'intervention affiche le `shape_svg` (composant `ParcelShape`, `react-native-svg`).
+> Pour la carte P7, prévoir une source GeoJSON dédiée (ou conversion), car
+> MapLibre attend des polygones GeoJSON, pas du SVG.
+
 ## 10. Cross-cutting
 
 ### i18n
@@ -681,9 +693,10 @@ flowchart LR
 
 Reportées du brainstorm + nouvelles soulevées par le design :
 
-1. **Idempotence Ekylibre sur `provider.id`** — confirmer que l'API
-   v2 dédoublonne sur ce champ ; sinon, ajouter un GET défensif
-   avant POST.
+1. ~~**Idempotence Ekylibre sur `provider.id`**~~ — **✅ RÉSOLU
+   (2026-05-30)** : l'API v2 dédoublonne sur `(provider.vendor,
+provider.id)` (2ᵉ POST identique → `200`, même `id`). Pas de GET défensif
+   nécessaire. Cf. §6 Idempotence + CHANGELOG P6.5.
 2. **Endpoint `?modified_since=`** — exists-il sur `/interventions`
    uniquement (vu dans le briefing API) ou aussi sur les catalogues ?
    Si oui, le diff complet pourra être remplacé par un delta serveur.
@@ -696,11 +709,19 @@ Reportées du brainstorm + nouvelles soulevées par le design :
    (XML ou JSON) de toutes les procédures Ekylibre via
    `GET /procedures/{name}` ; la cardinalité et les handlers de
    quantité seront le socle du moteur de formulaire dynamique.
+   **MAJ (2026-05-30)** : premier pas fait pour spraying — `/api/v2/procedures`
+   enrichi côté core renvoie les handlers en objets `{ name, indicator, unit }`
+   (au lieu de strings) ; l'app lit ces unités depuis la définition stockée
+   (`src/domain/procedures/spraying-handlers.ts`, fallback canonique). Le
+   **filtrage des handlers par produit** (conditions `if` du XML) reste à faire.
 6. **Cache des tuiles OSM** — choix du fournisseur (OSM direct,
    MapTiler, Stadia, Geoportail) selon le quota et les CGU ; à
    trancher avant les premiers builds publics.
-7. **Politique de mises à jour de schéma WDB** — convention
-   d'incrément + migrations à formaliser avant le 2ᵉ release.
+7. ~~**Politique de mises à jour de schéma WDB**~~ — **✅ AMORCÉ
+   (2026-05-30)** : schéma passé en **v2** avec une migration `addColumns`
+   (`src/core/db/migrations.ts`) ajoutant `dead_at` + `shape_svg` sur
+   `cultivable_zones`. Convention : bump `version` dans `schema.ts` + entrée
+   `{ toVersion, steps }` dans `migrations.ts`.
 8. **Multi-comptes (v2)** — documenter dès maintenant comment le
    schéma actuel évoluera (probable ajout d'une table `accounts` et
    d'un `account_id` partout).
@@ -711,6 +732,13 @@ Reportées du brainstorm + nouvelles soulevées par le design :
 10. **Suppression côté serveur** — si Ekylibre supprime une parcelle
     référencée par une intervention locale, comportement à définir
     (refus de sync, alerte utilisateur, fallback). Hors v1.
+11. **Cibles = produits `land_parcels`** (MAJ 2026-05-30) — le picker de cibles
+    n'utilise plus `/api/v2/cultivable_zones` (nom de zone, pas de fin de
+    culture) mais **`/api/v2/products?product_type=land_parcels`** : nom complet
+    de production (« Bernessard Blé tendre d'hiver 2026 »), `dead_at`,
+    `net_surface_area`, `shape_svg`. La table WDB `cultivable_zones` est
+    repointée sur cette source (+ colonnes `dead_at`, `shape_svg`). Le picker
+    filtre `dead_at IS NULL OU dead_at ≥ aujourd'hui − 1 an`.
 
 ## Hand-off
 

@@ -25,5 +25,11 @@ export class CultivableZone extends Model {
   @field('name') name!: string;
   @json('geometry_geojson', sanitizeGeometry) geometry!: GeoJsonGeometry | null;
   @field('area_hectares') areaHectares!: number | null;
+  // Fin de culture (ms epoch) — null = parcelle/culture active. Sert au
+  // filtrage du picker de cibles (cf. useCultivableZones).
+  @field('dead_at') deadAt!: number | null;
+  // Tracé SVG de la parcelle (fourni par products?product_type=land_parcels),
+  // affiché dans la vue détail. Null si non fourni.
+  @field('shape_svg') shapeSvg!: string | null;
   @field('updated_at_server') updatedAtServer!: number;
 }

@@ -1,7 +1,29 @@
 import { mapCultivableZoneDto } from '../cultivable-zone';
 
 describe('mapCultivableZoneDto', () => {
-  it('mappe une parcelle complète en parsant le GeoJSON de `shape_to_geojson`', () => {
+  it('mappe un land_parcel : nom complet, surface fractionnaire, dead_at', () => {
+    const dto = {
+      id: 1112,
+      name: 'Bernessard Blé tendre d’hiver 2026',
+      net_surface_area: { value: '4743/500', unit: 'hectare' },
+      born_at: '2025-10-01T00:00:00.000+02:00',
+      dead_at: '2026-08-31T00:00:00.000+02:00',
+      shape_svg: "<svg width='180' height='180'></svg>",
+      updated_at: '2025-10-01T00:00:00.000+02:00',
+    };
+
+    expect(mapCultivableZoneDto(dto)).toEqual({
+      serverId: 1112,
+      name: 'Bernessard Blé tendre d’hiver 2026',
+      geometry: null,
+      areaHectares: 4743 / 500,
+      deadAt: Date.parse('2026-08-31T00:00:00.000+02:00'),
+      shapeSvg: "<svg width='180' height='180'></svg>",
+      updatedAtServer: Date.parse('2025-10-01T00:00:00.000+02:00'),
+    });
+  });
+
+  it('parse le GeoJSON de `shape_to_geojson` quand présent', () => {
     const geometry = {
       type: 'Polygon',
       coordinates: [
@@ -9,47 +31,49 @@ describe('mapCultivableZoneDto', () => {
           [0, 0],
           [1, 0],
           [1, 1],
-          [0, 1],
           [0, 0],
         ],
       ],
     };
-    const dto = {
-      id: 12,
-      name: 'Parcelle Sud',
-      // L'API renvoie le WKT ici — il doit être ignoré.
-      shape: { feature: 'SRID=4326;POLYGON ((0 0, 1 0, 1 1, 0 1, 0 0))' },
-      // …et le vrai GeoJSON ici, encodé en STRING.
+    const result = mapCultivableZoneDto({
+      id: 5,
+      name: 'Parcelle test',
       shape_to_geojson: JSON.stringify(geometry),
-      area: 5.2,
-      updated_at: '2025-03-01T08:00:00Z',
-    };
-
-    expect(mapCultivableZoneDto(dto)).toEqual({
-      serverId: 12,
-      name: 'Parcelle Sud',
-      geometry,
-      areaHectares: 5.2,
-      updatedAtServer: Date.UTC(2025, 2, 1, 8, 0, 0),
     });
+    expect(result.geometry).toEqual(geometry);
   });
 
-  it('null-coalesce geometry et area quand absents', () => {
-    expect(mapCultivableZoneDto({ id: 1, name: 'X' })).toMatchObject({
+  it('deadAt null et area fallback quand absents', () => {
+    expect(mapCultivableZoneDto({ id: 1, name: 'X', area: 3.2 })).toMatchObject({
       geometry: null,
-      areaHectares: null,
+      areaHectares: 3.2,
+      deadAt: null,
     });
   });
 
-  it('renvoie geometry null si `shape_to_geojson` est une string invalide', () => {
+  it('convertit une surface en square_meter vers hectares', () => {
     expect(
-      mapCultivableZoneDto({ id: 2, name: 'Y', shape_to_geojson: 'pas-du-json' }),
-    ).toMatchObject({ geometry: null });
+      mapCultivableZoneDto({
+        id: 2,
+        name: 'Y',
+        net_surface_area: { value: 25000, unit: 'square_meter' },
+      }),
+    ).toMatchObject({ areaHectares: 2.5 });
   });
 
-  it('ignore `shape` (WKT) même si `shape_to_geojson` est absent', () => {
+  it('surface invalide → fallback sur area, sinon null', () => {
     expect(
-      mapCultivableZoneDto({ id: 3, name: 'Z', shape: { feature: 'SRID=4326;POINT (0 0)' } }),
+      mapCultivableZoneDto({
+        id: 3,
+        name: 'Z',
+        net_surface_area: { value: 'n/a', unit: 'hectare' },
+      }),
+    ).toMatchObject({ areaHectares: null });
+  });
+
+  it('renvoie geometry null si `shape_to_geojson` est invalide', () => {
+    expect(
+      mapCultivableZoneDto({ id: 4, name: 'W', shape_to_geojson: 'pas-du-json' }),
     ).toMatchObject({ geometry: null });
   });
 });

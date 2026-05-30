@@ -90,13 +90,15 @@ tuiles avant P7. Options :
 **Recommandation** : pour le pilote France, **MapTiler ou
 Geoportail** (vues aériennes utiles pour reconnaître les parcelles).
 
-- [ ] Décision prise : ********\_\_\_\_********
+- [ ] Décision prise : **\*\*\*\***\_\_\_\_**\*\*\*\***
 - [ ] Compte créé / token obtenu → variable EAS `MAP_TILE_TOKEN`
 
 ### 1.6. Instance Ekylibre de test
 
-- [ ] Instance Ekylibre dédiée pour les tests mobile, accessible
-      en HTTPS depuis l'extérieur (ou tunnel ngrok pour dev local).
+- [ ] Instance Ekylibre dédiée pour les tests mobile. Locale (Docker,
+      `https://<tenant>.ekylibre.localhost`) **ou** distante en HTTPS —
+      ngrok n'est requis que pour un device physique pointant vers une
+      instance locale (matrice de joignabilité : `docs/testing-guide.md` §0.2).
 - [ ] **API v2 activée** sur cette instance.
 - [ ] Compte utilisateur de test créé avec :
   - Mot de passe partagé dans le password manager.
@@ -109,7 +111,7 @@ Geoportail** (vues aériennes utiles pour reconnaître les parcelles).
   - ≥ 1 ouvrier (worker)
 - [ ] Vérification manuelle :
   - `curl -H "Authorization: simple-token <email> <token>" \
-   https://<instance>/api/v2/interventions` retourne `200`
+https://<instance>/api/v2/interventions` retourne `200`
   - `curl ... /api/v2/procedures` liste `spraying`
 
 ### 1.7. Repo GitHub

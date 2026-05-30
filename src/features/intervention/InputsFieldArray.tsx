@@ -11,15 +11,8 @@ import {
 
 import type { Product, Variant } from '@core/db/models';
 import type { SprayingInput } from '@domain/procedures/spraying';
+import type { SprayingHandlerOption } from '@domain/procedures/spraying-handlers';
 import { SelectField } from '@ui/index';
-
-// Liste fixe v1 des handlers de quantité acceptés pour `plant_medicine`.
-// Le mapping « handler valide pour ce produit précis » dépendra de la
-// définition XML de la procédure (P-v1.5+). En attendant, on propose les
-// 4 handlers les plus courants pour permettre à l'agriculteur de saisir.
-export const SPRAYING_HANDLERS = ['population', 'net_volume', 'net_mass', 'area_density'] as const;
-
-export type SprayingHandler = (typeof SPRAYING_HANDLERS)[number];
 
 export interface InputsFieldArrayProps {
   value: SprayingInput[];
@@ -28,14 +21,18 @@ export interface InputsFieldArrayProps {
   products: Product[];
   /** Catalogue variants filtré (côté parent) sur la catégorie pertinente. */
   variants: Variant[];
+  /** Handlers (mesure + unité) issus de la définition de procédure. */
+  handlers: SprayingHandlerOption[];
   /** Erreur agrégée Zod au niveau du tableau (« min 1 required »). */
   errorMessage?: string | null;
   testID?: string;
 }
 
 interface HandlerOption {
-  value: SprayingHandler;
+  value: string;
   label: string;
+  /** Unité Ekylibre canonique appliquée quand ce handler est choisi. */
+  unit: string;
 }
 
 export function InputsFieldArray({
@@ -43,14 +40,16 @@ export function InputsFieldArray({
   onChange,
   products,
   variants,
+  handlers,
   errorMessage,
   testID,
 }: InputsFieldArrayProps) {
   const { t } = useTranslation();
 
-  const handlerOptions: HandlerOption[] = SPRAYING_HANDLERS.map((h) => ({
-    value: h,
-    label: t(`interventions.spraying.handlers.${h}`),
+  const handlerOptions: HandlerOption[] = handlers.map((h) => ({
+    value: h.name,
+    label: t(h.labelKey),
+    unit: h.unit,
   }));
 
   const updateRow = (index: number, patch: Partial<SprayingInput>) => {
@@ -69,6 +68,7 @@ export function InputsFieldArray({
         reference_name: 'plant_medicine',
         quantity_value: 0,
         quantity_handler: '',
+        quantity_unit: '',
       },
     ]);
   };
@@ -213,7 +213,9 @@ function InputRow({
             label={t('interventions.spraying.inputs.handlerLabel')}
             items={handlerOptions}
             value={selectedHandler}
-            onChange={(opt) => onUpdate({ quantity_handler: opt?.value ?? '' })}
+            onChange={(opt) =>
+              onUpdate({ quantity_handler: opt?.value ?? '', quantity_unit: opt?.unit ?? '' })
+            }
             getKey={(o) => o.value}
             getLabel={(o) => o.label}
             placeholder={t('interventions.spraying.inputs.handlerPlaceholder')}
@@ -224,14 +226,11 @@ function InputRow({
 
       <View style={styles.unitWrap}>
         <Text style={styles.fieldLabel}>{t('interventions.spraying.inputs.unitLabel')}</Text>
-        <TextInput
-          style={styles.unitInput}
-          value={row.quantity_unit ?? ''}
-          placeholder={t('interventions.spraying.inputs.unitPlaceholder')}
-          onChangeText={(text) => onUpdate({ quantity_unit: text || undefined })}
-          autoCapitalize="none"
-          testID={testID ? `${testID}-unit` : undefined}
-        />
+        {/* Unité dérivée du handler choisi : affichage lecture seule, jamais
+            saisie librement (sinon paire handler/unité incohérente côté API). */}
+        <Text style={styles.unitValue} testID={testID ? `${testID}-unit` : undefined}>
+          {row.quantity_unit ? row.quantity_unit : '—'}
+        </Text>
       </View>
     </View>
   );
@@ -252,7 +251,7 @@ const styles = StyleSheet.create<{
   fieldLabel: TextStyle;
   numericInput: TextStyle;
   unitWrap: ViewStyle;
-  unitInput: TextStyle;
+  unitValue: TextStyle;
   addButton: ViewStyle;
   addButtonPressed: ViewStyle;
   addButtonText: TextStyle;
@@ -306,15 +305,15 @@ const styles = StyleSheet.create<{
     backgroundColor: '#fff',
   },
   unitWrap: { marginTop: 4 },
-  unitInput: {
-    borderColor: '#ddd',
+  unitValue: {
+    borderColor: '#eee',
     borderWidth: 1,
     borderRadius: 6,
     paddingVertical: 12,
     paddingHorizontal: 14,
     fontSize: 14,
-    color: '#222',
-    backgroundColor: '#fff',
+    color: '#555',
+    backgroundColor: '#f5f5f5',
   },
   addButton: {
     paddingVertical: 12,

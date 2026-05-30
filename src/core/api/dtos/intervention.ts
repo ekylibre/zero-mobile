@@ -29,3 +29,12 @@ export const interventionDtoSchema = z
 export type InterventionDto = z.infer<typeof interventionDtoSchema>;
 
 export const interventionListSchema = z.array(interventionDtoSchema);
+
+// Réponse d'écriture (POST/PUT /api/v2/interventions) : Ekylibre ne renvoie
+// QUE `{ "id": <int> }` (y compris le 200 idempotent). Il ne faut donc PAS la
+// valider contre `interventionDtoSchema` (qui exige procedure_name/started_at/
+// stopped_at) — sinon une ZodError fait échouer le push alors que le serveur a
+// bien créé l'intervention, et la ligne reste « à synchroniser ».
+export const interventionWriteResultSchema = z.object({ id: z.number() }).passthrough();
+
+export type InterventionWriteResult = z.infer<typeof interventionWriteResultSchema>;

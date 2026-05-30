@@ -19,6 +19,7 @@ export interface InterventionsListViewProps {
   onRefresh: () => void;
   onSync: () => void;
   onItemPress: (intervention: Intervention) => void;
+  onDelete: (intervention: Intervention) => void;
   onNew: () => void;
 }
 
@@ -37,6 +38,7 @@ export function InterventionsListView({
   onRefresh,
   onSync,
   onItemPress,
+  onDelete,
   onNew,
 }: InterventionsListViewProps) {
   const { t, i18n } = useTranslation();
@@ -101,6 +103,7 @@ export function InterventionsListView({
             intervention={item}
             procedureLabel={procedureLabels.get(item.procedureName)}
             onPress={() => onItemPress(item)}
+            onDelete={() => onDelete(item)}
           />
         )}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

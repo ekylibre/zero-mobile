@@ -115,6 +115,8 @@ export async function persistCultivableZones(
           m.name = row.name;
           m.geometry = row.geometry;
           m.areaHectares = row.areaHectares;
+          m.deadAt = row.deadAt;
+          m.shapeSvg = row.shapeSvg;
           m.updatedAtServer = row.updatedAtServer;
         }),
       );
@@ -125,6 +127,8 @@ export async function persistCultivableZones(
           m.name = row.name;
           m.geometry = row.geometry;
           m.areaHectares = row.areaHectares;
+          m.deadAt = row.deadAt;
+          m.shapeSvg = row.shapeSvg;
           m.updatedAtServer = row.updatedAtServer;
         }),
       );

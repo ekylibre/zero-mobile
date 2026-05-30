@@ -1,4 +1,4 @@
-import type { Database, Model } from '@nozbe/watermelondb';
+import { Q, type Database, type Model } from '@nozbe/watermelondb';
 
 import { generateClientUuid } from '@core/crypto/uuid';
 import type {
@@ -137,4 +137,40 @@ export async function persistSprayingIntervention(
   });
 
   return { interventionId: createdInterventionId, clientUuid };
+}
+
+// Tables enfants à purger avec l'intervention (pas de cascade WDB automatique).
+const INTERVENTION_CHILD_TABLES = [
+  Tables.interventionDoers,
+  Tables.interventionInputs,
+  Tables.interventionTargets,
+  Tables.interventionTools,
+  Tables.interventionWorkingPeriods,
+] as const;
+
+/**
+ * Supprime définitivement une intervention locale + toutes ses relations
+ * enfants, en une transaction. À n'appeler que pour une intervention NON
+ * synchronisée (pending/error) : une intervention `synced` existe côté Ekylibre
+ * et doit être éditée/supprimée via l'API, pas effacée silencieusement en local.
+ */
+export async function deleteIntervention(
+  database: Database,
+  interventionId: string,
+): Promise<void> {
+  await database.write(async () => {
+    const ops: Model[] = [];
+    for (const table of INTERVENTION_CHILD_TABLES) {
+      const children = await database.collections
+        .get(table)
+        .query(Q.where('intervention_id', interventionId))
+        .fetch();
+      ops.push(...children.map((c) => c.prepareDestroyPermanently()));
+    }
+    const intervention = await database.collections
+      .get<Intervention>(Tables.interventions)
+      .find(interventionId);
+    ops.push(intervention.prepareDestroyPermanently());
+    await database.batch(...ops);
+  });
 }

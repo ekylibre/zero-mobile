@@ -7,3 +7,8 @@ coverage/
 web-build/
 *.lock
 pnpm-lock.yaml
+
+# Artefacts Claude Code (réglages locaux + docs de planification) — hors
+# périmètre Prettier / CI. claudedocs contient des blocs de code non idempotents.
+.claude/
+claudedocs/

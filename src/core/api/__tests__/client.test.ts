@@ -216,6 +216,18 @@ describe('EkylibreApiClient.createIntervention', () => {
     expect(JSON.parse(init.body).provider.id).toBe('uuid-1');
   });
 
+  it('accepte une réponse réduite à { id } (POST/PUT ne renvoie que l’id)', async () => {
+    // Régression : avant, on parsait contre le DTO de lecture complet
+    // (procedure_name/started_at/stopped_at requis) → ZodError → l'intervention
+    // restait « à synchroniser » alors qu'elle était créée serveur-side.
+    const fetchMock = jest.fn().mockResolvedValue(makeResponse({ id: 60 }));
+    const client = makeAuthClient(fetchMock);
+
+    const res = await client.createIntervention(makePayload());
+
+    expect(res.id).toBe(60);
+  });
+
   it('lève ValidationError sur 422 avec les errors[] parsés', async () => {
     const fetchMock = jest
       .fn()
@@ -228,6 +240,24 @@ describe('EkylibreApiClient.createIntervention', () => {
       name: 'ValidationError',
       status: 422,
       errors: ['Driver missing', 'Quantity must be positive'],
+    });
+  });
+
+  it('lève ValidationError sur 400 (rejet définitif du payload, ex. Procedo)', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(
+        makeResponse(
+          { errors: ['Dont known how to manage node: Procedo::Formula::Nodes::ActorPresenceTest'] },
+          { status: 400 },
+        ),
+      );
+    const client = makeAuthClient(fetchMock);
+
+    await expect(client.createIntervention(makePayload())).rejects.toMatchObject({
+      name: 'ValidationError',
+      status: 400,
+      errors: ['Dont known how to manage node: Procedo::Formula::Nodes::ActorPresenceTest'],
     });
   });
 

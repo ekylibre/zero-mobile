@@ -1,9 +1,11 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
 
-// Schéma WatermelonDB v1 (cf. docs/architecture.md §3).
+// Schéma WatermelonDB (cf. docs/architecture.md §3).
 // Toute évolution → bump de version + migration dans migrations.ts.
+// v2 : cibles = produits land_parcels → ajout `dead_at` (filtrage fin de
+// culture) et `shape_svg` (tracé de la parcelle affiché dans le détail).
 export const schema = appSchema({
-  version: 1,
+  version: 2,
   tables: [
     tableSchema({
       name: 'procedures',
@@ -45,6 +47,8 @@ export const schema = appSchema({
         { name: 'name', type: 'string' },
         { name: 'geometry_geojson', type: 'string' },
         { name: 'area_hectares', type: 'number', isOptional: true },
+        { name: 'dead_at', type: 'number', isOptional: true },
+        { name: 'shape_svg', type: 'string', isOptional: true },
         { name: 'updated_at_server', type: 'number' },
       ],
     }),

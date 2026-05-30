@@ -39,6 +39,7 @@ function defaultProps(
     onRefresh: noop,
     onSync: noop,
     onItemPress: noop,
+    onDelete: noop,
     onNew: noop,
     ...overrides,
   };
@@ -128,6 +129,24 @@ describe('InterventionsListView', () => {
 
     fireEvent.press(screen.getByTestId('intervention-row-b'));
     expect(onItemPress).toHaveBeenCalledWith(target);
+  });
+
+  it('affiche Supprimer pour une intervention non synchronisée et appelle onDelete', () => {
+    const onDelete = jest.fn();
+    const target = makeIntervention({ id: 'c', syncState: 'pending' });
+
+    render(<InterventionsListView {...defaultProps({ interventions: [target], onDelete })} />);
+
+    fireEvent.press(screen.getByTestId('intervention-row-c-delete'));
+    expect(onDelete).toHaveBeenCalledWith(target);
+  });
+
+  it("n'affiche pas Supprimer pour une intervention synchronisée", () => {
+    const target = makeIntervention({ id: 'd', syncState: 'synced' });
+
+    render(<InterventionsListView {...defaultProps({ interventions: [target] })} />);
+
+    expect(screen.queryByTestId('intervention-row-d-delete')).toBeNull();
   });
 
   it('affiche le FAB "+" quand la liste n\'est pas vide', () => {

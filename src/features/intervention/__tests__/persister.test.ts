@@ -225,7 +225,7 @@ describe('persistSprayingIntervention', () => {
     });
   });
 
-  it('met variantId/quantityUnit à null si absents', async () => {
+  it('met variantId à null si absent (variant_id reste optionnel)', async () => {
     const mock = createMockDatabase();
     await persistSprayingIntervention(
       mock.database,
@@ -236,6 +236,7 @@ describe('persistSprayingIntervention', () => {
             reference_name: 'plant_medicine',
             quantity_value: 2,
             quantity_handler: 'net_volume',
+            quantity_unit: 'liter',
           },
         ],
       }),
@@ -244,7 +245,7 @@ describe('persistSprayingIntervention', () => {
 
     const inputOp = mock.ops.find((op) => op.table === Tables.interventionInputs);
     expect(inputOp?.fields.variantId).toBeNull();
-    expect(inputOp?.fields.quantityUnit).toBeNull();
+    expect(inputOp?.fields.quantityUnit).toBe('liter');
   });
 
   it('persiste plusieurs doers/inputs/tools quand fournis', async () => {
@@ -262,12 +263,14 @@ describe('persistSprayingIntervention', () => {
             reference_name: 'plant_medicine',
             quantity_value: 1,
             quantity_handler: 'population',
+            quantity_unit: 'unity',
           },
           {
             product_id: 'p2',
             reference_name: 'plant_medicine',
             quantity_value: 2,
             quantity_handler: 'net_volume',
+            quantity_unit: 'liter',
           },
         ],
         tools: [

@@ -1,7 +1,11 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Alert } from 'react-native';
 
+import { database } from '@core/db/database';
 import type { Intervention, Procedure } from '@core/db/models';
+import { captureException } from '@core/observability/sentry';
 import { useSyncCycle } from '@core/sync/use-sync-cycle';
 import {
   useErrorInterventionCount,
@@ -10,9 +14,11 @@ import {
   useProcedures,
 } from '@features/catalog/hooks';
 import { InterventionsListView } from '@features/intervention/InterventionsListView';
+import { deleteIntervention } from '@features/intervention/persister';
 
 export default function InterventionsListScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const interventions = useInterventions();
   const procedures = useProcedures();
   const pendingCount = usePendingInterventionCount();
@@ -58,6 +64,28 @@ export default function InterventionsListScreen() {
     [router],
   );
 
+  const onDelete = useCallback(
+    (intervention: Intervention) => {
+      Alert.alert(
+        t('interventions.list.deleteConfirmTitle'),
+        t('interventions.list.deleteConfirmMessage'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('common.delete'),
+            style: 'destructive',
+            onPress: () => {
+              void deleteIntervention(database, intervention.id).catch((error) => {
+                captureException(error);
+              });
+            },
+          },
+        ],
+      );
+    },
+    [t],
+  );
+
   const onNew = useCallback(() => {
     router.push('/(tabs)/interventions/new');
   }, [router]);
@@ -76,6 +104,7 @@ export default function InterventionsListScreen() {
       onRefresh={onRefresh}
       onSync={onSync}
       onItemPress={onItemPress}
+      onDelete={onDelete}
       onNew={onNew}
     />
   );

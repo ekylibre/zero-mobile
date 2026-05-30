@@ -1,13 +1,20 @@
 import { useLocalSearchParams } from 'expo-router';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useSyncCycle } from '@core/sync/use-sync-cycle';
-import { useInterventionById, useProcedureByName } from '@features/catalog/hooks';
-import { SyncBadge } from '@ui/index';
+import {
+  useCultivableZonesAll,
+  useInterventionById,
+  useProcedureByName,
+  useProductsAll,
+  useVariants,
+} from '@features/catalog/hooks';
+import { ParcelShape, SyncBadge } from '@ui/index';
 
 import { database } from '@core/db/database';
-import type { Intervention } from '@core/db/models';
+import type { Intervention, Product } from '@core/db/models';
 import { Tables } from '@core/db/schema';
 
 export default function InterventionDetailScreen() {
@@ -17,6 +24,15 @@ export default function InterventionDetailScreen() {
   const detail = useInterventionById(id);
   const procedure = useProcedureByName(detail.intervention?.procedureName);
   const { startSync, isBusy: syncBusy } = useSyncCycle();
+
+  // Résolution des noms : les relations (doers/inputs/tools/targets) stockent
+  // des ids locaux WDB → on les mappe vers les modèles catalogue.
+  const products = useProductsAll();
+  const zones = useCultivableZonesAll();
+  const variants = useVariants();
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const zoneById = useMemo(() => new Map(zones.map((z) => [z.id, z])), [zones]);
+  const variantById = useMemo(() => new Map(variants.map((v) => [v.id, v])), [variants]);
 
   if (!detail.intervention) {
     return (
@@ -100,14 +116,74 @@ export default function InterventionDetailScreen() {
         </Section>
       ) : null}
 
-      <CountSection label={t('interventions.detail.targets')} count={detail.targets.length} />
-      <CountSection label={t('interventions.detail.doers')} count={detail.doers.length} />
-      <CountSection label={t('interventions.detail.inputs')} count={detail.inputs.length} />
-      <CountSection label={t('interventions.detail.tools')} count={detail.tools.length} />
-      <CountSection
-        label={t('interventions.detail.workingPeriods')}
-        count={detail.workingPeriods.length}
-      />
+      <Section title={t('interventions.detail.targets')}>
+        {detail.targets.length === 0 ? (
+          <Text style={styles.muted}>{t('interventions.detail.emptyList')}</Text>
+        ) : (
+          detail.targets.map((target) => {
+            const zone = zoneById.get(target.cultivableZoneId);
+            return (
+              <View key={target.id} style={styles.parcelItem} testID={`detail-target-${target.id}`}>
+                <ParcelShape svg={zone?.shapeSvg ?? null} />
+                <View style={styles.parcelInfo}>
+                  <Text style={styles.itemName}>
+                    {zone?.name ?? t('interventions.detail.unknownItem')}
+                  </Text>
+                  {zone?.areaHectares != null ? (
+                    <Text style={styles.itemSub}>
+                      {t('interventions.spraying.areaHectares', {
+                        value: formatHectares(zone.areaHectares),
+                      })}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            );
+          })
+        )}
+      </Section>
+
+      <Section title={t('interventions.detail.doers')}>
+        <ProductList
+          rows={detail.doers}
+          productById={productById}
+          emptyLabel={t('interventions.detail.emptyList')}
+          unknownLabel={t('interventions.detail.unknownItem')}
+        />
+      </Section>
+
+      <Section title={t('interventions.detail.inputs')}>
+        {detail.inputs.length === 0 ? (
+          <Text style={styles.muted}>{t('interventions.detail.emptyList')}</Text>
+        ) : (
+          detail.inputs.map((input) => {
+            const product = productById.get(input.productId);
+            const variant = input.variantId ? variantById.get(input.variantId) : null;
+            const quantity =
+              `${formatQuantity(input.quantityValue)} ${input.quantityUnit ?? ''}`.trim();
+            return (
+              <View key={input.id} style={styles.listItem} testID={`detail-input-${input.id}`}>
+                <Text style={styles.itemName}>
+                  {product?.name ?? t('interventions.detail.unknownItem')}
+                </Text>
+                <Text style={styles.itemSub}>
+                  {quantity}
+                  {variant ? ` · ${variant.name}` : ''}
+                </Text>
+              </View>
+            );
+          })
+        )}
+      </Section>
+
+      <Section title={t('interventions.detail.tools')}>
+        <ProductList
+          rows={detail.tools}
+          productById={productById}
+          emptyLabel={t('interventions.detail.emptyList')}
+          unknownLabel={t('interventions.detail.unknownItem')}
+        />
+      </Section>
     </ScrollView>
   );
 }
@@ -135,13 +211,38 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function CountSection({ label, count }: { label: string; count: number }) {
+function ProductList({
+  rows,
+  productById,
+  emptyLabel,
+  unknownLabel,
+}: {
+  rows: { id: string; productId: string }[];
+  productById: Map<string, Product>;
+  emptyLabel: string;
+  unknownLabel: string;
+}) {
+  if (rows.length === 0) return <Text style={styles.muted}>{emptyLabel}</Text>;
   return (
-    <View style={styles.countSection}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.countValue}>{count}</Text>
-    </View>
+    <>
+      {rows.map((row) => (
+        <View key={row.id} style={styles.listItem} testID={`detail-row-${row.id}`}>
+          <Text style={styles.itemName}>
+            {productById.get(row.productId)?.name ?? unknownLabel}
+          </Text>
+        </View>
+      ))}
+    </>
   );
+}
+
+// Hectares avec 2 décimales max, sans zéro inutile (« 4,5 ha »).
+function formatHectares(value: number): string {
+  return value.toLocaleString('fr-FR', { maximumFractionDigits: 2, minimumFractionDigits: 0 });
+}
+
+function formatQuantity(value: number): string {
+  return value.toLocaleString('fr-FR', { maximumFractionDigits: 3 });
 }
 
 function formatDuration(
@@ -202,13 +303,20 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 14, color: '#666' },
   rowValue: { fontSize: 14, color: '#222', fontWeight: '500' },
   bodyText: { fontSize: 14, color: '#222', lineHeight: 20 },
-  countSection: {
+  parcelItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
+    gap: 12,
+    paddingVertical: 8,
     borderTopColor: '#eee',
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  countValue: { fontSize: 16, fontWeight: '600', color: '#222' },
+  parcelInfo: { flex: 1 },
+  listItem: {
+    paddingVertical: 8,
+    borderTopColor: '#eee',
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  itemName: { fontSize: 14, color: '#222', fontWeight: '500' },
+  itemSub: { fontSize: 13, color: '#666', marginTop: 2 },
 });

@@ -1,13 +1,14 @@
 import {
   cultivableZoneListSchema,
-  interventionDtoSchema,
   interventionListSchema,
+  interventionWriteResultSchema,
   procedureListSchema,
   productListSchema,
   variantListSchema,
   type ApiProductType,
   type CultivableZoneDto,
   type InterventionDto,
+  type InterventionWriteResult,
   type ProcedureDto,
   type ProductDto,
   type VariantDto,
@@ -155,8 +156,11 @@ export class EkylibreApiClient {
     return productListSchema.parse(raw);
   }
 
+  // Cibles `cultivation` = produits `land_parcels` (nom complet de production
+  // + `dead_at` + surface), et non l'endpoint `cultivable_zones` (qui ne donne
+  // que le nom de zone, sans fin de culture). Cf. ADR cibles / picker.
   async listCultivableZones(): Promise<CultivableZoneDto[]> {
-    const raw = await this.request<unknown>('/api/v2/cultivable_zones');
+    const raw = await this.request<unknown>('/api/v2/products?product_type=land_parcels');
     return cultivableZoneListSchema.parse(raw);
   }
 
@@ -189,12 +193,14 @@ export class EkylibreApiClient {
    * 422/412 → ValidationError avec `errors` (parsés du body) pour stockage
    * dans `intervention.sync_error_message`.
    */
-  async createIntervention(payload: CreateInterventionPayload): Promise<InterventionDto> {
+  async createIntervention(payload: CreateInterventionPayload): Promise<InterventionWriteResult> {
     const raw = await this.requestWithValidation('/api/v2/interventions', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return interventionDtoSchema.parse(raw);
+    // POST renvoie uniquement `{ id }` (idem 200 idempotent) — on ne valide
+    // donc PAS contre le DTO de lecture complet (cf. interventionWriteResultSchema).
+    return interventionWriteResultSchema.parse(raw);
   }
 
   /**
@@ -205,24 +211,30 @@ export class EkylibreApiClient {
   async updateIntervention(
     serverId: number,
     payload: UpdateInterventionPayload,
-  ): Promise<InterventionDto> {
+  ): Promise<InterventionWriteResult> {
     const raw = await this.requestWithValidation(`/api/v2/interventions/${serverId}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
-    return interventionDtoSchema.parse(raw);
+    return interventionWriteResultSchema.parse(raw);
   }
 
   /**
-   * Wrapper autour de `request<T>` qui transforme les 412/422 en
+   * Wrapper autour de `request<T>` qui transforme les 400/412/422 en
    * ValidationError dédiée. Garde tout le reste du flux (401, 5xx, réseau)
    * inchangé.
+   *
+   * Le 400 est inclus car Ekylibre v2 l'utilise pour des rejets définitifs
+   * du payload (ex. moteur de procédure Procedo : `Dont known how to manage
+   * node: ActorPresenceTest`). Le classer en ValidationError garantit que le
+   * push-engine le traite comme une erreur **définitive** (pas de retry en
+   * boucle, cf. push-engine) et remonte le message serveur à l'écran détail.
    */
   private async requestWithValidation(path: string, init: RequestInit): Promise<unknown> {
     try {
       return await this.request<unknown>(path, init);
     } catch (e) {
-      if (e instanceof ApiError && (e.status === 422 || e.status === 412)) {
+      if (e instanceof ApiError && (e.status === 400 || e.status === 422 || e.status === 412)) {
         throw new ValidationError(e.status, e.message, extractErrors(e.body), e.body);
       }
       throw e;

@@ -13,8 +13,8 @@ function makeValidInput(overrides: Partial<SprayingIntervention> = {}): unknown 
         variant_id: 'wdb-variant-1',
         reference_name: 'plant_medicine',
         quantity_value: 1.5,
-        quantity_handler: 'population',
-        quantity_unit: 'l/ha',
+        quantity_handler: 'volume_area_density',
+        quantity_unit: 'liter_per_hectare',
       },
     ],
     targets: [{ cultivable_zone_id: 'wdb-zone-1', reference_name: 'cultivation' }],
@@ -42,12 +42,14 @@ describe('sprayingInterventionSchema — happy path', () => {
             reference_name: 'plant_medicine',
             quantity_value: 1,
             quantity_handler: 'population',
+            quantity_unit: 'unity',
           },
           {
             product_id: 'p2',
             reference_name: 'plant_medicine',
             quantity_value: 2,
             quantity_handler: 'net_volume',
+            quantity_unit: 'liter',
           },
         ],
         tools: [
@@ -65,7 +67,7 @@ describe('sprayingInterventionSchema — happy path', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rend variant_id et quantity_unit optionnels sur les inputs', () => {
+  it('rend variant_id optionnel sur les inputs', () => {
     const result = sprayingInterventionSchema.safeParse(
       makeValidInput({
         inputs: [
@@ -74,6 +76,7 @@ describe('sprayingInterventionSchema — happy path', () => {
             reference_name: 'plant_medicine',
             quantity_value: 1,
             quantity_handler: 'population',
+            quantity_unit: 'unity',
           },
         ],
       }),
@@ -137,6 +140,7 @@ describe('sprayingInterventionSchema — invalidations', () => {
             reference_name: 'plant_medicine',
             quantity_value: 0,
             quantity_handler: 'population',
+            quantity_unit: 'unity',
           },
         ],
       }),
@@ -153,6 +157,7 @@ describe('sprayingInterventionSchema — invalidations', () => {
             reference_name: 'plant_medicine',
             quantity_value: -1,
             quantity_handler: 'population',
+            quantity_unit: 'unity',
           },
         ],
       }),
@@ -169,11 +174,58 @@ describe('sprayingInterventionSchema — invalidations', () => {
             reference_name: 'plant_medicine',
             quantity_value: 1,
             quantity_handler: '',
+            quantity_unit: 'unity',
           },
         ],
       }),
     );
     expect(result.success).toBe(false);
+  });
+
+  it('refuse si quantity_unit vide (unité désormais requise)', () => {
+    const result = sprayingInterventionSchema.safeParse(
+      makeValidInput({
+        inputs: [
+          {
+            product_id: 'p1',
+            reference_name: 'plant_medicine',
+            quantity_value: 1,
+            quantity_handler: 'population',
+            quantity_unit: '',
+          },
+        ],
+      }),
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => /unité requise/i.test(i.message))).toBe(true);
+    }
+  });
+
+  it('refuse une unité incohérente avec le handler (garde-fou ex-bug area_density/l)', () => {
+    const result = sprayingInterventionSchema.safeParse(
+      makeValidInput({
+        inputs: [
+          {
+            product_id: 'p1',
+            reference_name: 'plant_medicine',
+            quantity_value: 1,
+            quantity_handler: 'volume_area_density',
+            quantity_unit: 'l',
+          },
+        ],
+      }),
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(
+        result.error.issues.some(
+          (i) =>
+            i.path.join('.') === 'inputs.0.quantity_unit' &&
+            /attendu : liter_per_hectare/.test(i.message),
+        ),
+      ).toBe(true);
+    }
   });
 
   it('refuse si product_id input vide', () => {
@@ -185,6 +237,7 @@ describe('sprayingInterventionSchema — invalidations', () => {
             reference_name: 'plant_medicine',
             quantity_value: 1,
             quantity_handler: 'population',
+            quantity_unit: 'unity',
           },
         ],
       }),
@@ -238,6 +291,7 @@ describe('sprayingInterventionSchema — invalidations', () => {
             reference_name: 'seed' as unknown as 'plant_medicine',
             quantity_value: 1,
             quantity_handler: 'population',
+            quantity_unit: 'unity',
           },
         ],
       }),

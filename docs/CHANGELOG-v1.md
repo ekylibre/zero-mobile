@@ -6,6 +6,100 @@ non-générées.
 
 ## [Unreleased]
 
+### Vue intervention + liste : détails, tracé parcelle, suppression, fix statut — 2026-05-30
+
+- **Fix statut sync (bug)** : le push parsait la réponse POST/PUT contre le DTO
+  de lecture complet, mais Ekylibre ne renvoie que `{ id }` (idem 200
+  idempotent) → `ZodError` → la ligne restait « À synchroniser » alors qu'elle
+  était créée serveur-side. `createIntervention`/`updateIntervention` parsent
+  désormais `interventionWriteResultSchema` (`{ id }`).
+- **Détail enrichi** : la vue détail affiche le **détail** des cibles
+  (nom de parcelle + **tracé `shape_svg`**), conducteurs, intrants (produit +
+  quantité + unité + variante) et outils — au lieu de simples compteurs. Le
+  tracé est rendu par un composant `ParcelShape` qui extrait `viewBox` + le `d`
+  du path et rend un `<Svg><Path>` **explicite** (fill + stroke garantis) —
+  plus robuste que `SvgXml` (rendait blanc : pas de fill appliqué de façon
+  fiable selon le build).
+- **`shape_svg` stocké** : ajout colonne `shape_svg` sur `cultivable_zones`
+  (migration v2, avec `dead_at`), DTO/mapper/persister.
+- **Liste — action Supprimer** : bouton « Supprimer » sur les interventions
+  non synchronisées (pending/error), avec confirmation ; `deleteIntervention()`
+  purge l'intervention + ses relations en une transaction. (« Modifier » :
+  tâche dédiée à venir.)
+- **Dépendance native** : `react-native-svg` 15.15.3 → **rebuild EAS dev requis**
+  avant test device.
+- **Tests** : +3 (parsing `{ id }`, visibilité/clic Supprimer). Suite verte
+  (216/216), typecheck + lint OK.
+
+### Picker de cibles : land_parcels (nom complet de production + filtre dead_at) — 2026-05-30
+
+Le sélecteur de parcelle de l'écran de saisie affichait le nom de **zone**
+(« LES ESSARDS #01 ») et listait toutes les zones, sans tenir compte de la fin
+de culture.
+
+- **Source repointée** : `listCultivableZones()` interroge désormais
+  `GET /api/v2/products?product_type=land_parcels` (au lieu de
+  `/api/v2/cultivable_zones`). Ces produits portent le **nom complet de
+  production** (« Bernessard Blé tendre d'hiver 2026 »), `dead_at`, et
+  `net_surface_area` (valeur fractionnaire type `"4743/500"` parsée en ha).
+- **Filtre** : `useCultivableZones()` n'affiche que les cibles avec
+  `dead_at` null **ou** `dead_at ≥ aujourd'hui − 1 an` (cultures actives ou
+  terminées récemment).
+- **WDB** : schéma **v2** + migration `addColumns(dead_at)` sur
+  `cultivable_zones` ; mapper/persister propagent `deadAt`.
+- ⚠️ **Carte P7** : cette source ne fournit pas de GeoJSON (`shape_svg`
+  uniquement) — la géométrie carte devra venir d'une autre source ; le parsing
+  `shape_to_geojson` est conservé mais dormant.
+- **Tests** : mapper réécrit (nom complet, surface fractionnaire, dead_at,
+  conversion m²→ha). Suite verte (213/213), typecheck + lint OK.
+
+### Handlers/units spraying : sourcés depuis l'API + saisie conforme — 2026-05-30
+
+La saisie d'un intrant produisait des couples `(quantity_handler, quantity_unit)`
+non conformes à la procédure (`area_density` / `l` au lieu de
+`volume_area_density` / `liter_per_hectare`). Cause : liste de handlers
+hardcodée + unité saisie en **texte libre**.
+
+- **Serveur (Track A, repo `ekylibre`)** : `/api/v2/procedures` enrichi —
+  `handlers` passe de `[string]` à `[{ name, indicator?, unit? }]`
+  (`_parameter.json.jbuilder`). Vérifié live sur la démo.
+- **App (Track B)** : nouveau `spraying-handlers.ts` qui lit les handlers
+  depuis la définition de procédure stockée (`Procedure.definition`), avec
+  fallback canonique (miroir `spraying.xml`) si l'API renvoie encore l'ancienne
+  forme ou si le catalogue n'a pas été resynchronisé. Le sélecteur de mesure
+  fixe désormais **automatiquement** l'unité Ekylibre ; l'unité n'est plus
+  saisissable (affichage lecture seule). Schéma Zod : `quantity_unit` requis +
+  cohérent avec le handler (garde-fou anti-régression).
+- **Tests** : +`spraying-handlers` (parser : formes objet/string/fallback) ;
+  schéma et `InputsFieldArray` mis à jour. Suite verte (211/211), typecheck OK.
+- ⚠️ **Pré-requis device** : re-synchroniser le catalogue pour récupérer les
+  unités enrichies (sinon fallback canonique). Le push spraying reste par
+  ailleurs bloqué par le bug core P6.6 (`nil.unit` sur le tool `sprayer`).
+
+### Fix — gestion des `400` au push + ticket core spraying (P6.6) — 2026-05-30
+
+Découvert pendant la validation dev local S3 (push interventions sur device).
+Le `POST /api/v2/interventions` spraying renvoie `400` dès qu'il y a une cible
+ou un intrant : `{"errors":["Dont known how to manage node:
+Procedo::Formula::Nodes::ActorPresenceTest"]}` (idem `…::Division` pour l'input).
+Isolé par dichotomie : payload minimal (proc + wp + doer) → `201` ; +target →
+400 `ActorPresenceTest` ; +input → 400 `Division`.
+
+- **Cause** : l'interpréteur de formules Procedo de l'**API v2 d'Ekylibre** ne
+  sait pas évaluer ces nœuds → erreur 500-like renvoyée en 400. **Bug serveur**,
+  pas l'app : le `reference_name` du tool (sprayer/tractor/absent) n'a aucun
+  impact. ⚠️ Régression probable : le même POST renvoyait `201` plus tôt le
+  2026-05-30 (cf. ids 46/47 dans `p6.5`). Ticket core →
+  `docs/p6.6-ekylibre-spraying-procedo-issue.md`.
+- **Fix app (robustesse, A+B)** : un `400` est désormais converti en
+  `ValidationError` (`client.ts`), donc traité comme une **erreur définitive**
+  (plus de retry en boucle au cycle suivant) **et** son `errors[]` est extrait
+  et affiché verbatim dans l'écran détail (au lieu d'un générique « Erreur
+  serveur (400) »). Avant : 400 classé `retry` → restait `pending` + re-POST à
+  chaque cycle (risque de doublon vu la non-idempotence P6.5).
+- **Tests** : +1 cas client (`400 → ValidationError` avec errors parsés). Suite
+  complète verte (202/202), typecheck OK.
+
 ### Fix — sync `cultivable_zones` (géométrie WKT vs GeoJSON) — 2026-05-30
 
 Découvert pendant la validation dev local S1 sur device Android (instance

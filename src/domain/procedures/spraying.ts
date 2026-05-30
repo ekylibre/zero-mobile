@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { SPRAYING_HANDLER_UNITS } from './spraying-handlers';
+
 // Schéma Zod du formulaire « pulvérisation » (cf. docs/architecture.md §7
 // et docs/workflow.md P5). Les IDs référencés sont des IDs locaux
 // WatermelonDB (string), pas les server_id Ekylibre — la conversion
@@ -15,17 +17,34 @@ const doerSchema = z.object({
   reference_name: z.literal('driver'),
 });
 
-const inputSchema = z.object({
-  product_id: z.string().min(1, 'Produit requis.'),
-  variant_id: z.string().min(1).optional(),
-  reference_name: z.literal('plant_medicine'),
-  quantity_value: z
-    .number({ invalid_type_error: 'Quantité invalide.' })
-    .positive('La quantité doit être supérieure à 0.')
-    .finite('Quantité invalide.'),
-  quantity_handler: z.string().min(1, 'Unité de mesure requise.'),
-  quantity_unit: z.string().min(1).optional(),
-});
+const inputSchema = z
+  .object({
+    product_id: z.string().min(1, 'Produit requis.'),
+    variant_id: z.string().min(1).optional(),
+    reference_name: z.literal('plant_medicine'),
+    quantity_value: z
+      .number({ invalid_type_error: 'Quantité invalide.' })
+      .positive('La quantité doit être supérieure à 0.')
+      .finite('Quantité invalide.'),
+    quantity_handler: z.string().min(1, 'Mesure requise.'),
+    // Unité requise : elle est dérivée du handler choisi (cf. spraying-handlers
+    // + InputsFieldArray), jamais saisie librement.
+    quantity_unit: z.string().min(1, 'Unité requise.'),
+  })
+  // Cohérence handler ↔ unité : pour un handler connu, l'unité doit être
+  // l'unité canonique de spraying.xml. Garde-fou contre l'ancien bug
+  // (« area_density » / « l »). Handler inconnu (futur handler serveur) → on
+  // ne bloque pas l'unité (forward-compat).
+  .superRefine((input, ctx) => {
+    const expected = SPRAYING_HANDLER_UNITS[input.quantity_handler];
+    if (expected !== undefined && input.quantity_unit !== expected) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['quantity_unit'],
+        message: `Unité incohérente avec la mesure (attendu : ${expected}).`,
+      });
+    }
+  });
 
 const targetSchema = z.object({
   cultivable_zone_id: z.string().min(1, 'Parcelle requise.'),

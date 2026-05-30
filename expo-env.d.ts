@@ -1,4 +1,3 @@
 /// <reference types="expo/types" />
-/// <reference types="expo-router/types" />
 
-// NOTE: ce fichier est régénéré par expo CLI ; ne pas modifier manuellement.
+// NOTE: This file should not be edited and should be in your git ignore

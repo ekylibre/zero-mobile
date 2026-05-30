@@ -143,8 +143,9 @@ conscious choice (P6 entry in CHANGELOG).
 - If you bump Expo SDK, follow the official migration guide; don't
   hand-edit version numbers across `expo*` packages.
 - Adding a native dep (e.g. WatermelonDB in P3, `expo-crypto` and
-  `@react-native-community/datetimepicker` in P5, MapLibre in P7)
-  requires a new EAS dev build before `pnpm start` works on device.
+  `@react-native-community/datetimepicker` in P5, `react-native-svg`
+  for parcel shapes, MapLibre in P7) requires a new EAS dev build
+  before `pnpm start` works on device.
 
 ## Auth — quick reference (P2)
 
@@ -188,6 +189,19 @@ conscious choice (P6 entry in CHANGELOG).
 - `runInitialSync()` is **idempotent and resumable**. Don't add
   state outside `sync_state` — the resume model relies on
   `current_step` being the only progress marker.
+- **Schema is v2** (2026-05-30): bump `version` in `schema.ts` **and**
+  add a `{ toVersion, steps }` entry in `src/core/db/migrations.ts`
+  for every schema change (v2 added `dead_at` + `shape_svg` to
+  `cultivable_zones`).
+- **`cultivable_zones` is fed from `products?product_type=land_parcels`**,
+  not `/api/v2/cultivable_zones` — `client.listCultivableZones()` hits the
+  products endpoint. Rows carry the full production `name`
+  ("Bernessard Blé tendre d'hiver 2026"), `deadAt`, `shapeSvg`,
+  `areaHectares` (parsed from a fractional `net_surface_area`). The
+  target picker (`useCultivableZones`) filters
+  `dead_at IS NULL OR dead_at ≥ today − 1y`; resolve names in the
+  detail view via `useCultivableZonesAll` / `useProductsAll`
+  (unfiltered, by local id).
 
 ## Native rebuild gate
 
@@ -195,6 +209,14 @@ After P3, the dev client is no longer compatible with previous
 P1/P2 builds: WatermelonDB adds native code via JSI. Always run
 `pnpm build:dev:ios` / `pnpm build:dev:android` after pulling
 changes that touch deps or `app.json` plugins.
+
+**`react-native-svg` (added 2026-05-30)** is a native module too — a
+plain Metro reload is **not** enough, the dev client must be rebuilt
+or `<Svg>`/`ParcelShape` renders blank (symptom seen: parcel name
+shows, drawing area stays white). Under Fabric a missing native
+component fails silently (no crash). Note: rendering parcel shapes
+uses an explicit `<Svg><Path fill stroke>` (`src/ui/ParcelShape.tsx`),
+not `SvgXml` — `SvgXml` rendered blank (fill not reliably applied).
 
 ## UI layering (P4)
 
@@ -268,11 +290,14 @@ buildProvider })` is the production wrapper. Tests target the pure
 - **`MissingServerIdError`** = local reference whose product/zone
   was deleted server-side. Marks the intervention `error` with a
   user-actionable message; doesn't trigger a network call.
-- **Idempotence** is the open risk (architecture §11.1). The hook's
-  `useRef` lock prevents double-tap from the UI, but a server-side
-  ack lost on a flaky network would still cause a duplicate POST on
-  the next cycle if Ekylibre doesn't dedupe on `provider.id`. Bac à
-  sable test required before pilot — see CHANGELOG P6.4.
+- **Idempotence** — was the open risk; **now resolved server-side
+  (2026-05-30)**: Ekylibre v2 dedupes on `(provider.vendor,
+provider.id)`, so a duplicate POST (lost ack on flaky network)
+  returns `200` with the same `id`, no duplicate. The hook's `useRef`
+  lock still guards UI double-tap. ⚠️ Because the write response is
+  `{ id }` only, `createIntervention`/`updateIntervention` parse
+  `interventionWriteResultSchema` — **not** the full read DTO (parsing
+  the read DTO threw a ZodError and left rows stuck "à synchroniser").
 - **Error message format**: `intervention.sync_error_message` stores
   raw FR text, displayed verbatim by the detail screen. Engine helpers
   format these in `src/core/sync/push-engine.ts`. Stay consistent
@@ -280,24 +305,44 @@ buildProvider })` is the production wrapper. Tests target the pure
 
 ## Where work currently stops
 
-End of P6. Concretely:
+End of P6, **validated on-device against a live Ekylibre instance
+(2026-05-30)**. Concretely:
 
-- **Full offline → sync flow is jouable** end-to-end. Login →
+- **Full offline → sync flow works end-to-end on device.** Login →
   initial-sync → list → "+ Nouvelle intervention" → procedure picker
   → spraying form → save (`pending`). Tap "Synchroniser" (or
-  pull-to-refresh) → cycle pulling → pushing → row flips to `synced`
-  (green) or `error` (red, with persistent banner).
-- **Detail screen retry** is wired to the engine: tap "Réessayer" →
-  marks `pending` → triggers `startSync()` immediately.
-- **Logout warning** in Settings includes "N intervention(s) non
-  synchronisée(s) seront perdues" when `pendingCount > 0`.
+  pull-to-refresh) → row flips to `synced` (green) or `error` (red).
+- **Two server-side blockers were found AND fixed in Ekylibre core**
+  during device validation (separate repo `~/projects/ekylibre`):
+  - **P6.5 idempotence** — the v2 API now dedupes on
+    `(provider.vendor, provider.id)`: a duplicate POST returns `200`
+    with the same `id`. The pre-pilot blocker is **lifted**. ⚠️ The
+    write response is `{ id }` only — parse with
+    `interventionWriteResultSchema`, not the full read DTO (a wrong
+    parse left rows stuck "à synchroniser").
+  - **P6.6 spraying Procedo** — `POST /interventions` for spraying
+    raised `nil.unit` / `ActorPresenceTest` / `Division`; fixed core
+    side. See `docs/p6.6-ekylibre-spraying-procedo-issue.md`.
+- **Targets = `land_parcels` products** (not `/cultivable_zones`):
+  full production name + `dead_at` + `shape_svg`. Picker filters
+  `dead_at IS NULL OR dead_at ≥ today − 1y`. See DB quick-ref below.
+- **Spraying input handlers/units sourced from the API**:
+  `/api/v2/procedures` returns enriched handlers `{ name, indicator,
+unit }`; the form locks the unit to the chosen handler (no free
+  text). Parser: `src/domain/procedures/spraying-handlers.ts`.
+- **Intervention detail** shows full details (targets with `shape_svg`
+  via `ParcelShape`, doers/inputs/tools resolved names + quantities),
+  not just counts. **List** has a "Supprimer" action on non-synced
+  rows (`deleteIntervention`). Edit ("Modifier") is **not** done yet.
+- **WDB schema is v2** (migration adds `dead_at` + `shape_svg` to
+  `cultivable_zones`). **`react-native-svg` added** (native dep — see
+  rebuild gate).
 - **Catalogue map** (interactive parcel picker, MapLibre tiles) and
-  **pilot polish** — not yet implemented. They land in P7–P8 (see
-  `docs/workflow.md`).
+  **pilot polish** — not yet implemented (P7–P8, see `docs/workflow.md`).
+  Note: the map needs **GeoJSON**, but the current target source gives
+  only `shape_svg` — a GeoJSON source is still TODO (architecture §9).
 - **Not yet covered**:
-  - Bac à sable Ekylibre test for `provider.id` idempotence (see
-    CHANGELOG P6.4 — required before pilot).
-  - 1 E2E Maestro/Detox scenario covering login → save → sync →
-    server-side verification (workflow §10.1).
-  - Device demo on a real Ekylibre test instance to validate the
-    full flow with a panel farmer.
+  - "Modifier" (edit an unsynced intervention: prefill form + update).
+  - Per-product handler filtering (procedure `if` conditions).
+  - 1 E2E Maestro/Detox scenario (login → save → sync → verify).
+  - Re-run device smoke S2 + S5–S12 (S1/S3/S4 validated 2026-05-30).

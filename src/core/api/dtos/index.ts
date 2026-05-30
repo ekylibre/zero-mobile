@@ -8,7 +8,9 @@ export {
 export {
   interventionDtoSchema,
   interventionListSchema,
+  interventionWriteResultSchema,
   type InterventionDto,
+  type InterventionWriteResult,
 } from './intervention';
 export { procedureDtoSchema, procedureListSchema, type ProcedureDto } from './procedure';
 export {

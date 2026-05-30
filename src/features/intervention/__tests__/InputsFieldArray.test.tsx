@@ -4,10 +4,14 @@ import { useState } from 'react';
 import type { Product, Variant } from '@core/db/models';
 import { initI18n } from '@core/i18n';
 import type { SprayingInput } from '@domain/procedures/spraying';
+import { parseSprayingHandlers } from '@domain/procedures/spraying-handlers';
 
 import { InputsFieldArray } from '../InputsFieldArray';
 
 initI18n();
+
+// Liste canonique (population, net_mass, net_volume, mass/volume_area_density…).
+const HANDLERS = parseSprayingHandlers(undefined);
 
 function makeProduct(id: string, name: string): Product {
   return {
@@ -59,6 +63,7 @@ function renderField(initial: SprayingInput[] = []) {
         }}
         products={products}
         variants={variants}
+        handlers={HANDLERS}
         testID="inputs"
       />
     );
@@ -83,6 +88,7 @@ describe('InputsFieldArray', () => {
       reference_name: 'plant_medicine',
       quantity_value: 0,
       quantity_handler: '',
+      quantity_unit: '',
     });
   });
 
@@ -93,12 +99,14 @@ describe('InputsFieldArray', () => {
         reference_name: 'plant_medicine',
         quantity_value: 1,
         quantity_handler: 'population',
+        quantity_unit: 'unity',
       },
       {
         product_id: 'prod-2',
         reference_name: 'plant_medicine',
         quantity_value: 2,
         quantity_handler: 'net_volume',
+        quantity_unit: 'liter',
       },
     ]);
 
@@ -115,12 +123,14 @@ describe('InputsFieldArray', () => {
         reference_name: 'plant_medicine',
         quantity_value: 1,
         quantity_handler: 'population',
+        quantity_unit: 'unity',
       },
       {
         product_id: 'prod-2',
         reference_name: 'plant_medicine',
         quantity_value: 2,
         quantity_handler: 'net_volume',
+        quantity_unit: 'liter',
       },
     ]);
 
@@ -136,6 +146,7 @@ describe('InputsFieldArray', () => {
         reference_name: 'plant_medicine',
         quantity_value: 0,
         quantity_handler: 'population',
+        quantity_unit: 'unity',
       },
     ]);
 
@@ -153,6 +164,7 @@ describe('InputsFieldArray', () => {
         reference_name: 'plant_medicine',
         quantity_value: 5,
         quantity_handler: 'population',
+        quantity_unit: 'unity',
       },
     ]);
 
@@ -167,6 +179,7 @@ describe('InputsFieldArray', () => {
         reference_name: 'plant_medicine',
         quantity_value: 0,
         quantity_handler: '',
+        quantity_unit: '',
       },
     ]);
 
@@ -176,49 +189,54 @@ describe('InputsFieldArray', () => {
     expect(view.captured.value[0]?.product_id).toBe('prod-2');
   });
 
-  it('permet de sélectionner un handler dans la liste fixe', () => {
+  it('sélectionner un handler fixe automatiquement le quantity_handler ET son unité', () => {
     const view = renderField([
       {
         product_id: 'prod-1',
         reference_name: 'plant_medicine',
         quantity_value: 1,
         quantity_handler: '',
+        quantity_unit: '',
       },
     ]);
 
     fireEvent.press(screen.getByTestId('inputs-row-0-handler'));
-    fireEvent.press(screen.getByTestId('inputs-row-0-handler-item-net_volume'));
+    fireEvent.press(screen.getByTestId('inputs-row-0-handler-item-volume_area_density'));
 
-    expect(view.captured.value[0]?.quantity_handler).toBe('net_volume');
+    expect(view.captured.value[0]?.quantity_handler).toBe('volume_area_density');
+    expect(view.captured.value[0]?.quantity_unit).toBe('liter_per_hectare');
   });
 
-  it("écrit l'unité libre saisie dans quantity_unit", () => {
-    const view = renderField([
+  it("affiche l'unité du handler en lecture seule (pas de saisie libre)", () => {
+    renderField([
       {
         product_id: 'prod-1',
         reference_name: 'plant_medicine',
         quantity_value: 1,
-        quantity_handler: 'area_density',
+        quantity_handler: 'mass_area_density',
+        quantity_unit: 'kilogram_per_hectare',
       },
     ]);
 
-    fireEvent.changeText(screen.getByTestId('inputs-row-0-unit'), 'l/ha');
-    expect(view.captured.value[0]?.quantity_unit).toBe('l/ha');
+    const unit = screen.getByTestId('inputs-row-0-unit');
+    expect(unit).toBeOnTheScreen();
+    expect(unit.props.children).toBe('kilogram_per_hectare');
+    // Le champ n'est plus un TextInput éditable.
+    expect(unit.props.onChangeText).toBeUndefined();
   });
 
-  it('met quantity_unit à undefined si la saisie est vide', () => {
-    const view = renderField([
+  it('affiche un tiret quand aucune unité (handler non encore choisi)', () => {
+    renderField([
       {
         product_id: 'prod-1',
         reference_name: 'plant_medicine',
         quantity_value: 1,
-        quantity_handler: 'area_density',
-        quantity_unit: 'l/ha',
+        quantity_handler: '',
+        quantity_unit: '',
       },
     ]);
 
-    fireEvent.changeText(screen.getByTestId('inputs-row-0-unit'), '');
-    expect(view.captured.value[0]?.quantity_unit).toBeUndefined();
+    expect(screen.getByTestId('inputs-row-0-unit').props.children).toBe('—');
   });
 
   it('affiche errorMessage quand fourni', () => {
@@ -228,6 +246,7 @@ describe('InputsFieldArray', () => {
         onChange={jest.fn()}
         products={products}
         variants={variants}
+        handlers={HANDLERS}
         errorMessage="Au moins 1 produit phytosanitaire requis."
         testID="inputs"
       />,

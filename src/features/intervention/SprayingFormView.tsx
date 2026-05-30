@@ -15,9 +15,17 @@ import {
 
 import type { CultivableZone, Product, Variant } from '@core/db/models';
 import { sprayingInterventionSchema, type SprayingIntervention } from '@domain/procedures/spraying';
+import {
+  parseSprayingHandlers,
+  type SprayingHandlerOption,
+} from '@domain/procedures/spraying-handlers';
 import { DateTimeField, SelectField } from '@ui/index';
 
 import { InputsFieldArray } from './InputsFieldArray';
+
+// Liste canonique (miroir spraying.xml) utilisée tant que la définition de
+// procédure n'a pas été passée (ex. catalogue pas encore resynchronisé).
+const DEFAULT_SPRAYING_HANDLERS = parseSprayingHandlers(undefined);
 
 export interface SprayingFormViewProps {
   /** Catalogue de parcelles cultivables (target). */
@@ -30,6 +38,8 @@ export interface SprayingFormViewProps {
   matters: Product[];
   /** Variants déjà filtrés sur la catégorie pertinente (côté parent). */
   variants: Variant[];
+  /** Handlers (mesure + unité) issus de la définition de procédure spraying. */
+  handlers?: SprayingHandlerOption[];
   onSubmit: SubmitHandler<SprayingIntervention>;
   submitting?: boolean;
   /** Erreur top-level affichée en bandeau (échec persistance, etc.). */
@@ -42,6 +52,7 @@ export function SprayingFormView({
   equipments,
   matters,
   variants,
+  handlers = DEFAULT_SPRAYING_HANDLERS,
   onSubmit,
   submitting = false,
   submitError = null,
@@ -189,6 +200,7 @@ export function SprayingFormView({
               onChange={onChange}
               products={matters}
               variants={variants}
+              handlers={handlers}
               errorMessage={error?.message}
               testID="spraying-inputs"
             />

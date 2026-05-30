@@ -7,8 +7,12 @@
 > d'idempotence sur `provider.id`** (cf. arch §11.1, CHANGELOG P6.4 —
 > seul vrai blocker pour démarrer le pilote).
 >
-> Pré-requis supposés acquis : instance Ekylibre HTTPS + API v2 +
-> catalogue seedé minimal (cf. `docs/P0-checklist.md` §1.6).
+> Pré-requis supposés acquis : une instance Ekylibre (API v2 + catalogue
+> seedé minimal, cf. `docs/P0-checklist.md` §1.6). **L'instance peut être
+> locale** (Docker, `https://<tenant>.ekylibre.localhost`) **ou distante** —
+> et **ngrok n'est pas obligatoire** : voir §0.2 pour le détail par cas.
+> Les tests curl (dont le blocker S4) tournent contre une instance locale
+> sans tunnel (validé le 2026-05-30 contre `https://demo.ekylibre.localhost`).
 
 ## 0. Setup avant la 1re session
 
@@ -29,7 +33,57 @@ pnpm build:dev:ios               # ou build:dev:android
 Installe le `.ipa` / `.apk` sortant sur le device (Expo te donne un QR
 code TestFlight ou un lien direct). **Ne pas tenter avec Expo Go.**
 
-### 0.2. Variables côté instance Ekylibre
+### 0.2. Choisir l'instance : locale (sans ngrok) ou distante
+
+Deux modes. **ngrok n'est PAS un pré-requis** : il ne sert qu'à exposer une
+instance _locale_ à un _device physique_ en HTTPS public. Tout le reste
+(curl, simulateur, émulateur) marche sans tunnel.
+
+**A. Instance locale — recommandé pour le dev quotidien.**
+
+Ekylibre core tourne en local via son `docker compose` (reverse-proxy qui
+sert chaque tenant en `https://<tenant>.ekylibre.localhost`, certificat de
+dev). Setup côté repo **core** (hors de ce repo mobile) :
+
+```bash
+# Dans le repo ekylibre/ekylibre
+docker compose up -d                 # web + db + reverse-proxy
+# Création tenant + seed démo : les tâches rake EXACTES dépendent de la
+# version d'Ekylibre core — se référer à son README. À la fin on dispose :
+#   - d'une URL  https://<tenant>.ekylibre.localhost  (API v2 incluse)
+#   - d'un compte de test (email + mot de passe)
+```
+
+→ `EKY_INSTANCE_URL = https://<tenant>.ekylibre.localhost` (ex. `demo`).
+
+**B. Instance distante** : VM/serveur Ekylibre joignable en HTTPS public
+(cf. `docs/P0-checklist.md` §1.6). `EKY_INSTANCE_URL` = son URL. RAS.
+
+#### Joignabilité : qui doit atteindre l'instance ?
+
+Le piège du test local n'est pas l'instance, c'est **qui** lui parle.
+`*.ekylibre.localhost` ne résout qu'en `127.0.0.1`, **sur la machine de dev**.
+
+| Depuis…                     | URL à utiliser                                                                           | ngrok ?                                                                                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **curl (machine de dev)**   | `https://<tenant>.ekylibre.localhost`                                                    | ❌ non — c'est le cas de TOUS les tests curl : sanity §0.4, **S4 idempotence**, vérifs serveur S3/S5/S10.                                      |
+| **Simulateur iOS**          | `https://<tenant>.ekylibre.localhost`                                                    | ❌ non — partage la pile réseau du Mac (ajouter le vhost à `/etc/hosts` si `.localhost` ne résout pas ; importer le cert de dev au trousseau). |
+| **Émulateur Android**       | `adb reverse tcp:443 tcp:443` puis l'URL `.localhost`, ou `https://10.0.2.2`             | ❌ non — `adb reverse` mappe le loopback de l'hôte dans l'émulateur.                                                                           |
+| **Device physique (Wi-Fi)** | IP LAN de la machine (`https://192.168.x.x`) + instance acceptant ce host, **ou** tunnel | ⚠️ **ngrok (ou équivalent) ici** : le vhost `.localhost` + cert self-signed ne sont ni résolus ni valides depuis le téléphone.                 |
+
+**TL;DR**
+
+- Le **blocker S4** et tous les tests curl : instance **locale, sans ngrok**.
+- Scénarios UI sur **simulateur/émulateur** : instance **locale, sans ngrok**.
+- Scénarios UI sur **device physique** contre une instance **locale** :
+  c'est le seul cas où ngrok (ou une IP LAN + cert accepté) est requis.
+  Sinon, pointer le device vers une instance **distante** (mode B).
+
+> Cert self-signed : si curl refuse le certificat de l'instance locale,
+> ajouter `-k` aux commandes (§0.4). Sur device, l'app rejettera un cert de
+> dev non approuvé — attendu ; préférer une instance distante pour l'UI device.
+
+### 0.3. Variables côté instance Ekylibre
 
 Note dans ton password manager (jamais commit) :
 
@@ -39,9 +93,12 @@ Note dans ton password manager (jamais commit) :
 | `EKY_TEST_EMAIL`    | email du compte utilisateur                 |
 | `EKY_TEST_PASSWORD` | mot de passe                                |
 
-### 0.3. Sanity check curl
+### 0.4. Sanity check curl
 
-Avant de lancer l'app, vérifie que l'instance répond au schéma attendu :
+Avant de lancer l'app, vérifie que l'instance répond au schéma attendu.
+Lancé **depuis la machine de dev**, donc OK contre une instance locale comme
+distante (cf. §0.2). Si le cert local est self-signed, ajoute `-k` à chaque
+`curl`.
 
 ```bash
 # Login → récupère un token
@@ -62,10 +119,10 @@ done
 Tous doivent retourner **200**. Si 401/403 → token KO. Si 404 → API v2
 pas activée. **Stoppe ici** et corrige avant de continuer.
 
-### 0.4. Lancer Metro
+### 0.5. Lancer Metro
 
 ```bash
-pnpm start                       # dev client uniquement, pas Expo Go
+pnpm start                      # dev client uniquement, pas Expo Go
 ```
 
 Sur le device, ouvre l'app dev client → scanne le QR code Metro ou colle
@@ -123,18 +180,23 @@ Le tableau retourné doit contenir l'intervention avec son `provider.id`.
 
 ## 2. Scénarios crucial : idempotence (à débloquer **avant pilote**)
 
-C'est le seul vrai blocker P6 pour passer en pilote (cf. CHANGELOG
-P6.4). On veut savoir **si Ekylibre dédoublonne sur `provider.id`**.
+> **✅ RÉSOLU (2026-05-30, core).** L'API v2 dédoublonne désormais sur
+> `(provider.vendor, provider.id)` : un 2ᵉ POST identique renvoie **`200` avec
+> le même `id`** (= Résultat A ci-dessous). Le blocker P6.5 est **levé**.
+> Section conservée pour mémoire / non-régression.
+
+C'était le seul vrai blocker P6 pour passer en pilote (cf. CHANGELOG
+P6.4/P6.5). On voulait savoir **si Ekylibre dédoublonne sur `provider.id`**.
 
 ### S4 — Test bac à sable : double POST identique
 
-| Étape                               | Détail                                                                                                                                                                                                                |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Setup                               | Récupérer un payload exact qu'on enverrait au POST. Le plus simple : faire S2 + S3, puis lire les logs Metro pour voir le body envoyé. Ou intercepter via Charles Proxy. Sauvegarder le payload comme `payload.json`. |
-| Action 1                            | `curl -X POST -H "Authorization: simple-token $EKY_TEST_EMAIL $TOKEN" -H "Content-Type: application/json" -d @payload.json "$EKY_INSTANCE_URL/api/v2/interventions"` → noter `id` retourné.                           |
-| Action 2                            | **Re-jouer exactement le même curl** (même `provider.id` UUID).                                                                                                                                                       |
-| Résultat A — server dédoublonne     | Le 2e appel retourne le **même `id`** (ou 200 sans création). ✅ Idempotent. **Décision : trust (P6 ship as-is)**. Documenter dans CHANGELOG.                                                                         |
-| Résultat B — server crée un doublon | Le 2e appel retourne un `id` **différent**. ❌ Pas idempotent. **Décision : ajouter un GET défensif avant chaque POST** (cf. P6.4 _Action requise_). Ouvrir un ticket pour P6.5.                                      |
+| Étape                               | Détail                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Setup                               | Récupérer un payload exact qu'on enverrait au POST. Le plus simple : faire S2 + S3, puis lire les logs Metro pour voir le body envoyé. Ou intercepter via Charles Proxy. Sauvegarder le payload comme `payload.json`.                                                                                                                                       |
+| Action 1                            | `curl -X POST -H "Authorization: simple-token $EKY_TEST_EMAIL $TOKEN" -H "Content-Type: application/json" -d @payload.json "$EKY_INSTANCE_URL/api/v2/interventions"` → noter `id` retourné.                                                                                                                                                                 |
+| Action 2                            | **Re-jouer exactement le même curl** (même `provider.id` UUID).                                                                                                                                                                                                                                                                                             |
+| Résultat A — server dédoublonne     | Le 2e appel retourne le **même `id`** (ou 200 sans création). ✅ Idempotent. **Décision : trust (P6 ship as-is)**. Documenter dans CHANGELOG.                                                                                                                                                                                                               |
+| Résultat B — server crée un doublon | Le 2e appel retourne un `id` **différent**. ❌ Pas idempotent. **C'est le cas observé le 2026-05-30** (ids 44≠45 / 46≠47). ⚠️ Le GET défensif initialement envisagé est **non faisable** : `provider` n'est pas sérialisé par `GET /api/v2/interventions` et il n'existe pas de filtre `provider_id`. Fix → ticket **P6.5** (dédup côté serveur priorisée). |
 
 **Variante** : tester avec un payload qui a déjà été POSTé via l'app
 mobile (réutilise un `client_uuid` existant en local). Si l'app
@@ -218,10 +280,17 @@ geste doit être no-op silencieusement (pas d'erreur UI).
 
 À cocher avant d'envisager la phase pilote :
 
-- [ ] **S1** Login + sync initiale → catalogue téléchargé sur le device
+- [x] **S1** Login + sync initiale → catalogue téléchargé sur le device
+      (validé device 2026-05-30, après fix géométrie `cultivable_zones`).
 - [ ] **S2** Saisie spraying offline → ligne pending visible
-- [ ] **S3** Sync online → ligne synced + intervention visible côté Eky web avec le bon `provider.id`
-- [ ] **S4** Test bac à sable idempotence → décision **trust** ou **GET défensif** documentée dans CHANGELOG
+- [x] **S3** Sync online → ligne synced + intervention visible côté Eky web avec
+      le bon `provider.id` (validé après fix core **P6.6** spraying Procedo +
+      fix app du parsing réponse `{ id }` qui laissait la ligne « à
+      synchroniser »).
+- [x] **S4** Test bac à sable idempotence → **✅ RÉSOLU côté core (2026-05-30)** :
+      l'API v2 dédoublonne sur `provider.id` (2ᵉ POST identique → `200`, même
+      `id`). Le blocker P6.5 est **levé**. Repro initiale via
+      `scripts/s4-idempotence.sh` (RÉSULTAT B), confirmée corrigée depuis.
 - [ ] **S5** 422 → message serveur visible dans détail
 - [ ] **S6** 5xx → reste pending + retry OK
 - [ ] **S7** Network down → reste pending + retry OK
@@ -236,8 +305,15 @@ Si **tous verts** → green light pour préparer P7 (carte) et lancer le
 panel pilote en parallèle (cf. P0-checklist §1.6 + workflow §11
 checkpoints).
 
-Si **un rouge** → ne pas distribuer au panel. Ouvrir un ticket P6.5
-ciblé sur le scénario qui casse.
+Si **un rouge** → ne pas distribuer au panel. Ouvrir un ticket ciblé sur le
+scénario qui casse.
+
+> **MAJ 2026-05-30** — le blocker historique **S4 (idempotence)** est **levé**
+> côté core, et **S3** (push spraying) passe désormais bout-en-bout après le fix
+> core **P6.6** (procédure spraying : nœuds Procedo `ActorPresenceTest`/
+> `Division`/`nil.unit`, cf. `docs/p6.6-ekylibre-spraying-procedo-issue.md`) et
+> le fix app du parsing de la réponse d'écriture (`{ id }`). Restent à repasser
+> sur device : S2, S5–S12.
 
 ## 6. Outils utiles
 

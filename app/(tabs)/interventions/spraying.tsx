@@ -6,7 +6,13 @@ import { Alert } from 'react-native';
 import { database } from '@core/db/database';
 import { captureException } from '@core/observability/sentry';
 import type { SprayingIntervention } from '@domain/procedures/spraying';
-import { useCultivableZones, useProductsByType, useVariants } from '@features/catalog/hooks';
+import { parseSprayingHandlers } from '@domain/procedures/spraying-handlers';
+import {
+  useCultivableZones,
+  useProcedureByName,
+  useProductsByType,
+  useVariants,
+} from '@features/catalog/hooks';
 import { SprayingFormView } from '@features/intervention/SprayingFormView';
 import { persistSprayingIntervention } from '@features/intervention/persister';
 
@@ -29,6 +35,14 @@ export default function SprayingFormScreen() {
   const phytoVariants = useMemo(
     () => allVariants.filter((v) => v.category === PLANT_MEDICINE_CATEGORY),
     [allVariants],
+  );
+
+  // Handlers (mesure + unité) lus depuis la définition de procédure spraying
+  // synchronisée (/api/v2/procedures). Fallback canonique si absente.
+  const sprayingProcedure = useProcedureByName('spraying');
+  const handlers = useMemo(
+    () => parseSprayingHandlers(sprayingProcedure?.definition),
+    [sprayingProcedure],
   );
 
   const onSubmit = useCallback(
@@ -57,6 +71,7 @@ export default function SprayingFormScreen() {
       equipments={equipments}
       matters={matters}
       variants={phytoVariants}
+      handlers={handlers}
       onSubmit={onSubmit}
       submitting={submitting}
       submitError={submitError}

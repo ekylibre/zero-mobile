@@ -6,7 +6,9 @@
     "cancel": "Annuler",
     "retry": "Réessayer",
     "back": "Retour",
-    "ok": "OK"
+    "ok": "OK",
+    "delete": "Supprimer",
+    "edit": "Modifier"
   },
   "select": {
     "searchHint": "Rechercher…",
@@ -74,7 +76,9 @@
         "error": "Échec de la synchronisation"
       },
       "lastSyncAt": "Dernière sync : {{time}}",
-      "lastSyncNever": "Jamais synchronisé sur cet appareil."
+      "lastSyncNever": "Jamais synchronisé sur cet appareil.",
+      "deleteConfirmTitle": "Supprimer l'intervention ?",
+      "deleteConfirmMessage": "Cette intervention non synchronisée sera définitivement supprimée de cet appareil."
     },
     "new": {
       "title": "Nouvelle intervention",
@@ -124,14 +128,16 @@
         "quantityPlaceholder": "0",
         "handlerLabel": "Mesure",
         "handlerPlaceholder": "Choisir une mesure…",
-        "unitLabel": "Unité (optionnel)",
-        "unitPlaceholder": "ex : l/ha"
+        "unitLabel": "Unité"
       },
       "handlers": {
-        "population": "Population (unités)",
-        "net_volume": "Volume net (litres)",
+        "population": "Population (unité)",
         "net_mass": "Masse nette (kg)",
-        "area_density": "Dose à l'hectare"
+        "net_volume": "Volume net (l)",
+        "mass_area_density": "Dose massique (kg/ha)",
+        "volume_area_density": "Dose volumique (l/ha)",
+        "specific_weight": "Poids spécifique (kg/hl)",
+        "volume_density": "Densité volumique (l/hl)"
       },
       "areaHectares": "{{value}} ha",
       "save": "Enregistrer l'intervention",
@@ -158,7 +164,9 @@
       "doers": "Conducteurs",
       "inputs": "Intrants",
       "tools": "Outils",
-      "workingPeriods": "Périodes de travail"
+      "workingPeriods": "Périodes de travail",
+      "emptyList": "Aucun",
+      "unknownItem": "Élément introuvable dans le catalogue"
     },
     "syncState": {
       "pending": "À synchroniser",
