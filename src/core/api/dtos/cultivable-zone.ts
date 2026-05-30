@@ -16,7 +16,11 @@ export const cultivableZoneDtoSchema = z
   .object({
     id: z.number(),
     name: z.string(),
-    shape: geoJsonGeometrySchema.optional().nullable(),
+    // `shape` est au format WKT Ekylibre ({ feature, properties }), PAS du
+    // GeoJSON — on ne le valide donc pas. Le vrai GeoJSON arrive dans
+    // `shape_to_geojson`, encodé en STRING (cf. mapCultivableZoneDto).
+    shape: z.unknown().optional().nullable(),
+    shape_to_geojson: z.string().optional().nullable(),
     area: z.number().optional().nullable(),
     updated_at: z.string().optional(),
   })

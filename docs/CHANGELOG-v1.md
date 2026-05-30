@@ -6,8 +6,84 @@ non-générées.
 
 ## [Unreleased]
 
+### Fix — sync `cultivable_zones` (géométrie WKT vs GeoJSON) — 2026-05-30
+
+Découvert pendant la validation dev local S1 sur device Android (instance
+locale exposée via ngrok). La sync initiale échouait systématiquement à
+l'étape **« Parcelles cultivables »** dès qu'une ferme a des parcelles.
+
+- **Constat** : `GET /api/v2/cultivable_zones` renvoie `200`, mais le
+  champ `shape` est du **WKT** (`{ feature: "SRID=4326;MULTIPOLYGON(…)" }`,
+  sans `type`), pas du GeoJSON. Le vrai GeoJSON est dans un champ séparé
+  **`shape_to_geojson`**, encodé en **string**. Le schéma Zod
+  `cultivableZoneDtoSchema` exigeait `shape.type` → `ZodError` →
+  sync cassée. Masqué jusqu'ici (jamais synchronisé bout-en-bout sur
+  device contre une instance avec géométries).
+- **Fix** : `shape` n'est plus validé comme GeoJSON ; ajout de
+  `shape_to_geojson: z.string()` au DTO ; `mapCultivableZoneDto` parse
+  cette string (avec fallback `null` si invalide) pour alimenter
+  `geometry`. Couvre aussi correctement l'entrée carte de P7.
+- **Tests** : `mapCultivableZoneDto` réécrit (4 cas : GeoJSON parsé, WKT
+  ignoré, string invalide → null, champs absents). Suite complète verte
+  (201/201), typecheck + lint OK.
+
+### Validation dev local P6 — 2026-05-30
+
+Flux scriptable (login → catalogue → POST interventions) exercé contre
+une instance Ekylibre live via `scripts/s4-idempotence.sh`. Focus :
+trancher l'idempotence `provider.id` (P6.4 _Action requise_).
+
+- ✅ **`actions: []` accepté** par `POST /api/v2/interventions` (201) —
+  lève le point de vigilance « champ non documenté » de P6.1/P6.4.
+- ✅ Forme du payload (`*_attributes` imbriqués + bloc `provider`)
+  acceptée par le serveur : POST minimal (proc + working_period +
+  doer) → 201.
+- ❌ **S4 idempotence : RÉSULTAT B — Ekylibre ne dédoublonne PAS sur
+  `provider.id`.** Deux POST identiques (même `provider.id`) →
+  **deux interventions distinctes** (ids 44≠45, 46≠47 sur la démo).
+  Voir ticket **P6.5** ci-dessous.
+
+### P6.5 — Idempotence sync (BLOCKER pilote, ouvert)
+
+> Issu de la validation dev local du 2026-05-30. Bloque la distribution
+> au panel pilote (cf. `docs/testing-guide.md` §2, signoff §5).
+
+- **Constat** : le serveur ne déduplique pas sur `provider.id`. Un ack
+  perdu après un POST réussi → doublon garanti au cycle suivant.
+- **Aggravant** : `provider` n'est **pas sérialisé** dans
+  `GET /api/v2/interventions`, et l'endpoint n'expose aucun filtre
+  `provider_id`. ⇒ Le **GET défensif** envisagé en P6.4 _n'est pas
+  faisable_ côté client avec l'API v2 actuelle. La piste
+  `GET /interventions?provider_id=<uuid>` de P6.4 est donc **caduque
+  en l'état**.
+- **Options** (à trancher avec l'équipe Ekylibre core) :
+  1. **Serveur** : dédup sur `provider.id` au POST (upsert) +
+     sérialiser `provider` dans la réponse list/show. _Préféré_ —
+     règle la cause racine et débloque aussi tout futur pull-merge.
+  2. **Client** : protocole d'ack durable (ne re-POSTer que si le
+     précédent n'a pas confirmé un `server_id`), sans GET défensif.
+     Atténue sans garantir (course réseau résiduelle).
+- **D'ici le fix** : le lock `useRef` de `useSyncCycle` couvre le
+  double-tap UI mais **pas** l'ack perdu. Ne pas distribuer au pilote
+  avant arbitrage.
+
+### Risques d'intégration découverts (à exercer en S3/S5)
+
+- ⚠️ **Tool `reference_name: 'sprayer'`** (cf. `spraying.ts`) →
+  `400 { errors: ["undefined method 'unit' for nil"] }` quand le
+  produit `equipments` choisi n'est pas réellement un pulvérisateur
+  (testé avec un tracteur). L'app laisse l'utilisateur choisir
+  n'importe quel équipement comme `sprayer` → risque de crash serveur
+  en prod. À cadrer : filtrer les équipements par variété, ou aligner
+  le `reference_name` sur la définition de procédure.
+- ⚠️ **Target `cultivation`** : une culture clôturée (démo : fin
+  31/08/2017) refuse un POST daté hors de sa fenêtre
+  (`403 « La parcelle/culture n'existe pas après… »`). À valider que
+  l'app n'autorise pas une saisie hors période de validité parcelle.
+
 ### En cours
 
+- P6.5 — Idempotence sync (blocker pilote, ci-dessus)
 - P7 — Carte des parcelles (à venir)
 
 ## P6 — Sync engine
@@ -136,6 +212,10 @@ errorBanner_*,lastSyncAt,lastSyncNever}` + `settings.logoutPendingWarning_*`.
 
 **Action requise après cette phase** :
 
+- ✅ **TRANCHÉ le 2026-05-30 — RÉSULTAT B (non idempotent).** Voir
+  _Validation dev local P6_ + ticket _P6.5_ en tête de fichier. Le
+  GET défensif proposé ci-dessous s'est révélé **non faisable**
+  (provider non sérialisé / pas de filtre `provider_id`).
 - ⚠️ **Test bac à sable Ekylibre pour confirmer l'idempotence sur
   `provider.id`** — décision « trust + warn » prise au démarrage de
   P6 (cf. risques majeurs workflow §6). Le lock anti-réentrance dans
