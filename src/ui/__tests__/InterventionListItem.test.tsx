@@ -63,6 +63,19 @@ describe('InterventionListItem', () => {
     expect(screen.getByText('2 cultures • 4,3 ha')).toBeOnTheScreen();
   });
 
+  it('affiche le message d’erreur serveur sur une intervention en erreur', () => {
+    render(
+      <InterventionListItem
+        intervention={makeIntervention({
+          syncState: 'error',
+          syncErrorMessage: 'Parcelle introuvable après le 01/04/2026',
+        })}
+      />,
+    );
+    expect(screen.getByTestId('intervention-row-iv-1-error')).toBeOnTheScreen();
+    expect(screen.getByText('Parcelle introuvable après le 01/04/2026')).toBeOnTheScreen();
+  });
+
   it('montre « Supprimer » sur une intervention non synchronisée et déclenche onDelete', () => {
     const onDelete = jest.fn();
     render(

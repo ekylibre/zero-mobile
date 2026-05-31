@@ -103,6 +103,16 @@ export default function InterventionsListScreen() {
     [t],
   );
 
+  const onEdit = useCallback(
+    (intervention: Intervention) => {
+      router.push({
+        pathname: '/(tabs)/interventions/spraying',
+        params: { id: intervention.id },
+      });
+    },
+    [router],
+  );
+
   const onNew = useCallback(() => {
     router.push('/(tabs)/interventions/new');
   }, [router]);
@@ -123,6 +133,7 @@ export default function InterventionsListScreen() {
       onSync={onSync}
       onItemPress={onItemPress}
       onDelete={onDelete}
+      onEdit={onEdit}
       onNew={onNew}
     />
   );

@@ -97,12 +97,27 @@ export async function persistProductsForType(
   });
 }
 
+// Type de cible cultivable : parcelle ou culture. Stocké dans la colonne
+// `kind` de `cultivable_zones` (table unifiée des cibles, cf. schéma v3).
+export type CultivableZoneKind = 'land_parcel' | 'plant';
+
 export async function persistCultivableZones(
   database: Database,
   rows: CultivableZoneRow[],
+  kind: CultivableZoneKind,
 ): Promise<void> {
   const collection = database.collections.get<CultivableZone>(Tables.cultivableZones);
-  const existing = await collection.query().fetch();
+
+  // Upsert + delete-extras **scopés au kind** : persister les parcelles ne doit
+  // pas toucher les cultures (et vice-versa). Les rows migrées de v2 ont
+  // `kind=null` : ce sont toutes des parcelles → on les rattache au scope
+  // 'land_parcel' (sinon elles seraient dupliquées par serverId au 1er re-sync,
+  // puis supprimées du scope 'land_parcel' à tort).
+  const scopeClause =
+    kind === 'land_parcel'
+      ? Q.or(Q.where('kind', 'land_parcel'), Q.where('kind', null))
+      : Q.where('kind', kind);
+  const existing = await collection.query(scopeClause).fetch();
   const byKey = new Map(existing.map((m) => [m.serverId, m]));
   const incoming = new Set(rows.map((r) => r.serverId));
 
@@ -117,6 +132,7 @@ export async function persistCultivableZones(
           m.areaHectares = row.areaHectares;
           m.deadAt = row.deadAt;
           m.shapeSvg = row.shapeSvg;
+          m.kind = kind;
           m.updatedAtServer = row.updatedAtServer;
         }),
       );
@@ -129,6 +145,7 @@ export async function persistCultivableZones(
           m.areaHectares = row.areaHectares;
           m.deadAt = row.deadAt;
           m.shapeSvg = row.shapeSvg;
+          m.kind = kind;
           m.updatedAtServer = row.updatedAtServer;
         }),
       );

@@ -40,6 +40,7 @@ function defaultProps(
     onSync: noop,
     onItemPress: noop,
     onDelete: noop,
+    onEdit: noop,
     onNew: noop,
     ...overrides,
   };

@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -29,6 +29,7 @@ import { Tables } from '@core/db/schema';
 export default function InterventionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t, i18n } = useTranslation();
+  const router = useRouter();
 
   const detail = useInterventionById(id);
   const procedure = useProcedureByName(detail.intervention?.procedureName);
@@ -72,6 +73,16 @@ export default function InterventionDetailScreen() {
 
   const durationLabel = formatDuration(intervention.workingDurationSeconds, t);
 
+  // Édition autorisée uniquement tant que l'intervention n'est pas synchronisée
+  // (pending/error) — une `synced` existe côté Ekylibre (cf. workflow §6.3).
+  const isModifiable = intervention.syncState === 'pending' || intervention.syncState === 'error';
+  const onEdit = () => {
+    router.push({
+      pathname: '/(tabs)/interventions/spraying',
+      params: { id: intervention.id },
+    });
+  };
+
   const onRetry = async () => {
     // Repasse l'intervention en `pending` pour qu'elle soit re-tentée, puis
     // déclenche immédiatement un cycle de sync. L'utilisateur s'attend à ce
@@ -100,6 +111,17 @@ export default function InterventionDetailScreen() {
         </Text>
         <SyncBadge state={intervention.syncState} />
       </View>
+
+      {isModifiable ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onEdit}
+          style={({ pressed }) => [styles.editButton, pressed && styles.editButtonPressed]}
+          testID="detail-edit"
+        >
+          <Text style={styles.editButtonText}>{t('common.edit')}</Text>
+        </Pressable>
+      ) : null}
 
       {intervention.syncState === 'error' && intervention.syncErrorMessage ? (
         <View style={styles.errorBanner}>
@@ -303,6 +325,17 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   heading: { flex: 1, fontSize: fontSize.xl, fontWeight: '600', color: colors.textPrimary },
+  editButton: {
+    alignSelf: 'flex-start',
+    borderColor: colors.blue,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  editButtonPressed: { backgroundColor: colors.blueSoft },
+  editButtonText: { color: colors.blue, fontWeight: '600', fontSize: fontSize.base },
   errorBanner: {
     backgroundColor: colors.dangerBg,
     borderColor: colors.danger,

@@ -135,9 +135,16 @@ async function runStep(
       return;
     }
     case 'cultivable_zones': {
-      onProgress({ step, index, total });
-      const dtos = await deps.api.listCultivableZones();
-      await persistCultivableZones(deps.database, dtos.map(mapCultivableZoneDto));
+      // Cibles unifiées : parcelles (land_parcels) + cultures (plants). Même
+      // table `cultivable_zones`, distinguées par `kind`. Persistance scopée
+      // par kind (cf. persistCultivableZones) → l'un n'écrase pas l'autre.
+      onProgress({ step, index, total, substep: { current: 1, total: 2, label: 'land_parcels' } });
+      const parcels = await deps.api.listCultivableZones();
+      await persistCultivableZones(deps.database, parcels.map(mapCultivableZoneDto), 'land_parcel');
+
+      onProgress({ step, index, total, substep: { current: 2, total: 2, label: 'plants' } });
+      const plants = await deps.api.listPlants();
+      await persistCultivableZones(deps.database, plants.map(mapCultivableZoneDto), 'plant');
       return;
     }
     case 'variants': {

@@ -55,6 +55,12 @@ export interface SprayingFormViewProps {
   submitting?: boolean;
   /** Erreur top-level affichée en bandeau (échec persistance, etc.). */
   submitError?: string | null;
+  /**
+   * Valeurs initiales du formulaire (mode édition). Si fourni, le form est
+   * pré-rempli ; sinon, valeurs par défaut (mode création). La forme des
+   * tableaux `[{...}]` est conservée à l'identique (cf. RHF reset).
+   */
+  initialValues?: SprayingIntervention;
 }
 
 type SectionKey = 'dates' | 'target' | 'doer' | 'inputs' | 'tool' | 'description';
@@ -70,10 +76,12 @@ export function SprayingFormView({
   onCancel,
   submitting = false,
   submitError = null,
+  initialValues,
 }: SprayingFormViewProps) {
   const { t, i18n } = useTranslation();
 
   const defaultValues = useMemo<SprayingIntervention>(() => {
+    if (initialValues) return initialValues;
     const now = new Date();
     const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
     return {
@@ -86,6 +94,9 @@ export function SprayingFormView({
       targets: [],
       tools: [],
     };
+    // `initialValues` est figé au montage (l'écran remonte le form sur edit via
+    // une `key` distincte) — pas besoin de le mettre en dépendance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const {
@@ -236,13 +247,7 @@ export function SprayingFormView({
                   }
                   getKey={(z) => z.id}
                   getLabel={(z) => z.name}
-                  getSubtitle={(z) =>
-                    z.areaHectares != null
-                      ? t('interventions.spraying.areaHectares', {
-                          value: formatHectares(z.areaHectares),
-                        })
-                      : null
-                  }
+                  getSubtitle={(z) => targetSubtitle(z, t)}
                   summary={(zones) => summarizeTargets(zones, t)}
                   placeholder={t('interventions.spraying.selects.targetPlaceholder')}
                   emptyText={t('interventions.spraying.selects.targetEmpty')}
@@ -414,6 +419,24 @@ export function SprayingFormView({
 // Affiche les hectares avec 2 décimales max, sans zéro inutile (« 4,5 ha »).
 function formatHectares(value: number): string {
   return value.toLocaleString('fr-FR', { maximumFractionDigits: 2, minimumFractionDigits: 0 });
+}
+
+// Sous-titre d'une cible dans le picker : type (Parcelle | Culture) + surface.
+// `kind` null = rows migrées avant le schéma v3 → traitées comme parcelles.
+function targetSubtitle(
+  zone: CultivableZone,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  const kindLabel =
+    zone.kind === 'plant'
+      ? t('interventions.spraying.targetKind.plant')
+      : t('interventions.spraying.targetKind.landParcel');
+  if (zone.areaHectares != null) {
+    return `${kindLabel} · ${t('interventions.spraying.areaHectares', {
+      value: formatHectares(zone.areaHectares),
+    })}`;
+  }
+  return kindLabel;
 }
 
 // Résumé « N cultures • X ha » d'un ensemble de cibles (multi-cibles).

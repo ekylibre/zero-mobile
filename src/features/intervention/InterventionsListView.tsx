@@ -29,6 +29,7 @@ export interface InterventionsListViewProps {
   onSync: () => void;
   onItemPress: (intervention: Intervention) => void;
   onDelete: (intervention: Intervention) => void;
+  onEdit: (intervention: Intervention) => void;
   onNew: () => void;
 }
 
@@ -49,6 +50,7 @@ export function InterventionsListView({
   onSync,
   onItemPress,
   onDelete,
+  onEdit,
   onNew,
 }: InterventionsListViewProps) {
   const { t, i18n } = useTranslation();
@@ -116,6 +118,7 @@ export function InterventionsListView({
             targetSummary={targetSummaries?.get(item.id)}
             onPress={() => onItemPress(item)}
             onDelete={() => onDelete(item)}
+            onEdit={() => onEdit(item)}
           />
         )}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

@@ -162,7 +162,11 @@
       "saving": "Enregistrement…",
       "saved": "Intervention enregistrée.",
       "errorTitle": "Impossible d'enregistrer",
-      "errorIncomplete": "Le formulaire est incomplet. Vérifiez les champs ci-dessus."
+      "errorIncomplete": "Le formulaire est incomplet. Vérifiez les champs ci-dessus.",
+      "targetKind": {
+        "landParcel": "Parcelle",
+        "plant": "Culture"
+      }
     },
     "detail": {
       "title": "Détail de l'intervention",
@@ -191,6 +195,11 @@
       "syncing": "En cours",
       "synced": "Synchronisée",
       "error": "Erreur"
+    },
+    "edit": {
+      "title": "Modifier l’intervention",
+      "saved": "Intervention modifiée.",
+      "action": "Modifier"
     }
   },
   "map": {

@@ -15,6 +15,8 @@ interface InterventionListItemProps {
   onPress?: () => void;
   /** Appelé au tap « Supprimer ». Le bouton n'apparaît que si non synchronisée. */
   onDelete?: () => void;
+  /** Appelé au tap « Modifier ». Le bouton n'apparaît que si non synchronisée. */
+  onEdit?: () => void;
 }
 
 export function InterventionListItem({
@@ -23,6 +25,7 @@ export function InterventionListItem({
   targetSummary,
   onPress,
   onDelete,
+  onEdit,
 }: InterventionListItemProps) {
   const { t, i18n } = useTranslation();
   const dateLabel = relativeDateLabel(intervention.startedAt, new Date(), i18n.language || 'fr', t);
@@ -62,18 +65,43 @@ export function InterventionListItem({
           </Text>
         ) : null}
 
+        {intervention.syncState === 'error' && intervention.syncErrorMessage ? (
+          <Text
+            style={styles.errorText}
+            numberOfLines={4}
+            testID={`intervention-row-${intervention.id}-error`}
+          >
+            {intervention.syncErrorMessage}
+          </Text>
+        ) : null}
+
         <View style={styles.footerLine}>
           <SyncBadge state={intervention.syncState} />
-          {isModifiable && onDelete ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={onDelete}
-              hitSlop={8}
-              style={({ pressed }) => [styles.deleteButton, pressed && styles.deletePressed]}
-              testID={`intervention-row-${intervention.id}-delete`}
-            >
-              <Text style={styles.deleteText}>{t('common.delete')}</Text>
-            </Pressable>
+          {isModifiable ? (
+            <View style={styles.actions} testID={`intervention-row-${intervention.id}-actions`}>
+              {onEdit ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={onEdit}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.editButton, pressed && styles.editPressed]}
+                  testID={`intervention-row-${intervention.id}-edit`}
+                >
+                  <Text style={styles.editText}>{t('common.edit')}</Text>
+                </Pressable>
+              ) : null}
+              {onDelete ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={onDelete}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.deleteButton, pressed && styles.deletePressed]}
+                  testID={`intervention-row-${intervention.id}-delete`}
+                >
+                  <Text style={styles.deleteText}>{t('common.delete')}</Text>
+                </Pressable>
+              ) : null}
+            </View>
           ) : null}
         </View>
       </View>
@@ -117,7 +145,12 @@ const styles = StyleSheet.create<{
   date: TextStyle;
   summary: TextStyle;
   description: TextStyle;
+  errorText: TextStyle;
   footerLine: ViewStyle;
+  actions: ViewStyle;
+  editButton: ViewStyle;
+  editPressed: ViewStyle;
+  editText: TextStyle;
   deleteButton: ViewStyle;
   deletePressed: ViewStyle;
   deleteText: TextStyle;
@@ -143,6 +176,7 @@ const styles = StyleSheet.create<{
   date: { fontSize: fontSize.md, color: colors.greenDark, fontWeight: '600' },
   summary: { fontSize: fontSize.md, color: colors.textSecondary, marginTop: 2 },
   description: { fontSize: fontSize.md, color: colors.textPrimary, marginTop: 2 },
+  errorText: { fontSize: fontSize.md, color: colors.danger, marginTop: spacing.xs },
   footerLine: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -150,6 +184,16 @@ const styles = StyleSheet.create<{
     marginTop: spacing.sm,
     gap: spacing.sm,
   },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  editButton: {
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.sm,
+    borderColor: colors.blue,
+    borderWidth: 1,
+  },
+  editPressed: { backgroundColor: colors.blueSoft },
+  editText: { fontSize: fontSize.md, color: colors.blue, fontWeight: '600' },
   deleteButton: {
     paddingVertical: 6,
     paddingHorizontal: spacing.md,

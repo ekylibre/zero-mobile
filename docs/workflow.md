@@ -444,6 +444,47 @@ gestion d'erreurs par intervention.
 - 1 scénario E2E qui couvre saisie + sync + apparition côté serveur
   (avec instance Ekylibre de test).
 
+## 7bis. Incrément post-P6 — UI, cibles cultures & édition (2026-05-31)
+
+Incrément réalisé après la validation P6 on-device, hors découpage
+initial P0–P8 (refonte ergonomique alignée sur l'ancienne app
+`zero-android-v3` + deux fonctionnalités demandées).
+
+### Livré
+
+- **Refonte UI saisie** (accordéons, résumés repliés, multi-cibles,
+  icônes de procédure reprises des drawables Android, primitives sur
+  tokens de thème).
+- **Cibles cultures** en plus des parcelles : `client.listPlants()`
+  (`?product_type=plants`), table `cultivable_zones` unifiée avec
+  colonne `kind` (schéma WDB **v3**), ingestion à delete-extras **par
+  kind**, picker affichant les deux types (sous-titre Parcelle/Culture).
+- **Édition d'intervention** : route `spraying?id=`, préremplissage du
+  formulaire (`initialValues` / `toFormValues`),
+  `updateSprayingIntervention` (1 write + 1 batch : update + delete
+  enfants + recréation, repasse `sync_state='pending'`). Autorisée
+  uniquement si non synchronisée (`pending`/`error`) ; entrées
+  « Modifier » sur la liste et le détail.
+- **Message d'erreur de sync affiché** in-app (le serveur renvoie les
+  erreurs de validation en **403** `{errors:[…]}` → désormais classées
+  `ValidationError` et affichées verbatim sur le détail/ligne).
+
+### Décisions
+
+- Stockage **unifié** parcelles/cultures (vs deux tables) — `kind`
+  porté par le persister.
+- `reference_name='cultivation'` pour toute cible spraying.
+- **Pas de filtrage shape à l'ingestion** — fallback sur le 403.
+- Picker **liste plate** (kind en sous-titre), pas de section-headers.
+- Édition **interdite si `synced`** (la ligne existe côté Ekylibre).
+
+### Reste
+
+- Filtrage des handlers par produit (conditions `if` de la procédure).
+- 1 scénario E2E + test unitaire de la route d'édition (intégration).
+- Re-sync catalogue obligatoire sur device (colonne `kind`, migration
+  JS, pas de rebuild natif).
+
 ## 8. P7 — Carte des parcelles (M)
 
 **Objectif** : visualiser les parcelles sur une carte et permettre
