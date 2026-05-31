@@ -38,13 +38,14 @@ const mockedUpdateSyncState = updateSyncState as jest.MockedFunction<typeof upda
 function makeApiMock(): jest.Mocked<
   Pick<
     EkylibreApiClient,
-    'listProcedures' | 'listProducts' | 'listCultivableZones' | 'listVariants'
+    'listProcedures' | 'listProducts' | 'listCultivableZones' | 'listPlants' | 'listVariants'
   >
 > {
   return {
     listProcedures: jest.fn().mockResolvedValue([]),
     listProducts: jest.fn().mockResolvedValue([]),
     listCultivableZones: jest.fn().mockResolvedValue([]),
+    listPlants: jest.fn().mockResolvedValue([]),
     listVariants: jest.fn().mockResolvedValue([]),
   } as unknown as jest.Mocked<EkylibreApiClient>;
 }
@@ -73,6 +74,7 @@ describe('runInitialSync — premier run', () => {
 
     expect(api.listProcedures).toHaveBeenCalledTimes(1);
     expect(api.listCultivableZones).toHaveBeenCalledTimes(1);
+    expect(api.listPlants).toHaveBeenCalledTimes(1);
     expect(api.listVariants).toHaveBeenCalledTimes(1);
     expect(api.listProducts).toHaveBeenCalledTimes(3); // workers, equipments, matters
     expect(api.listProducts).toHaveBeenCalledWith('workers');
@@ -81,7 +83,14 @@ describe('runInitialSync — premier run', () => {
 
     expect(mockedPersistProcedures).toHaveBeenCalledTimes(1);
     expect(mockedPersistProducts).toHaveBeenCalledTimes(3);
-    expect(mockedPersistZones).toHaveBeenCalledTimes(1);
+    // 2 appels : parcelles (land_parcel) + cultures (plant).
+    expect(mockedPersistZones).toHaveBeenCalledTimes(2);
+    expect(mockedPersistZones).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      'land_parcel',
+    );
+    expect(mockedPersistZones).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'plant');
     expect(mockedPersistVariants).toHaveBeenCalledTimes(1);
   });
 
@@ -136,6 +145,7 @@ describe('runInitialSync — reprise', () => {
     expect(api.listProcedures).not.toHaveBeenCalled();
     expect(api.listProducts).not.toHaveBeenCalled();
     expect(api.listCultivableZones).toHaveBeenCalledTimes(1);
+    expect(api.listPlants).toHaveBeenCalledTimes(1);
     expect(api.listVariants).toHaveBeenCalledTimes(1);
   });
 
@@ -171,6 +181,7 @@ describe("runInitialSync — gestion d'erreur", () => {
 
     expect(api.listProcedures).toHaveBeenCalledTimes(1);
     expect(api.listCultivableZones).not.toHaveBeenCalled();
+    expect(api.listPlants).not.toHaveBeenCalled();
     expect(api.listVariants).not.toHaveBeenCalled();
 
     const errorCall = mockedUpdateSyncState.mock.calls.find(
@@ -197,6 +208,7 @@ describe("runInitialSync — gestion d'erreur", () => {
     expect(recoverApi.listProcedures).not.toHaveBeenCalled();
     expect(recoverApi.listProducts).toHaveBeenCalledTimes(3);
     expect(recoverApi.listCultivableZones).toHaveBeenCalledTimes(1);
+    expect(recoverApi.listPlants).toHaveBeenCalledTimes(1);
     expect(recoverApi.listVariants).toHaveBeenCalledTimes(1);
   });
 });

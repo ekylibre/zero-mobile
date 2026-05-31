@@ -4,8 +4,11 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 // Toute évolution → bump de version + migration dans migrations.ts.
 // v2 : cibles = produits land_parcels → ajout `dead_at` (filtrage fin de
 // culture) et `shape_svg` (tracé de la parcelle affiché dans le détail).
+// v3 : les cibles peuvent aussi être des cultures (products?product_type=plants).
+// `cultivable_zones` devient « les cibles cultivables » (parcelles + cultures) ;
+// colonne `kind` ('land_parcel' | 'plant') pour distinguer.
 export const schema = appSchema({
-  version: 2,
+  version: 3,
   tables: [
     tableSchema({
       name: 'procedures',
@@ -49,6 +52,9 @@ export const schema = appSchema({
         { name: 'area_hectares', type: 'number', isOptional: true },
         { name: 'dead_at', type: 'number', isOptional: true },
         { name: 'shape_svg', type: 'string', isOptional: true },
+        // 'land_parcel' (défaut historique) | 'plant'. Indexé : le delete-extras
+        // de l'ingestion se fait par kind (cf. persistCultivableZones, A3).
+        { name: 'kind', type: 'string', isOptional: true, isIndexed: true },
         { name: 'updated_at_server', type: 'number' },
       ],
     }),

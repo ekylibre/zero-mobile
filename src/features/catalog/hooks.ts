@@ -135,6 +135,31 @@ export function useErrorInterventionCount(): number {
 }
 
 /**
+ * Compte les cibles et somme leurs surfaces (ha) par intervention. Réactif
+ * (observe `intervention_targets` + `cultivable_zones`). Sert au résumé
+ * « N cultures • X ha » de la liste des interventions (une requête globale,
+ * pas une par ligne).
+ */
+export function useInterventionTargetCounts(): Map<
+  string,
+  { count: number; areaHectares: number }
+> {
+  const targets = useCollectionQuery<InterventionTarget>(Tables.interventionTargets, [], []);
+  const zones = useCultivableZonesAll();
+  return useMemo(() => {
+    const areaByZone = new Map(zones.map((z) => [z.id, z.areaHectares ?? 0]));
+    const acc = new Map<string, { count: number; areaHectares: number }>();
+    for (const target of targets) {
+      const current = acc.get(target.interventionId) ?? { count: 0, areaHectares: 0 };
+      current.count += 1;
+      current.areaHectares += areaByZone.get(target.cultivableZoneId) ?? 0;
+      acc.set(target.interventionId, current);
+    }
+    return acc;
+  }, [targets, zones]);
+}
+
+/**
  * Récupère une procédure par son nom (clé naturelle, immuable).
  * Permet d'afficher le label FR à partir de `intervention.procedureName`.
  */

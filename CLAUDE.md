@@ -17,8 +17,10 @@ Read first, in order:
 3. `docs/workflow.md` — phased delivery plan (P0 → P8)
 4. `docs/P0-checklist.md` — external prerequisites (accounts, DSNs)
 
-The repo currently sits at the end of **P6 (sync engine)**.
-P7 (parcels map) is the next phase.
+The repo sits **past P6 (sync engine)** with a post-P6 increment on
+top: spraying-form redesign, cultures-as-targets, intervention edit,
+in-app sync-error messages, and procedure icons (see "Where work
+currently stops"). **P7 (parcels map) is the next phase.**
 
 ## Stack & non-obvious choices
 
@@ -189,19 +191,44 @@ conscious choice (P6 entry in CHANGELOG).
 - `runInitialSync()` is **idempotent and resumable**. Don't add
   state outside `sync_state` — the resume model relies on
   `current_step` being the only progress marker.
-- **Schema is v2** (2026-05-30): bump `version` in `schema.ts` **and**
+- **Schema is v3** (2026-05-31): bump `version` in `schema.ts` **and**
   add a `{ toVersion, steps }` entry in `src/core/db/migrations.ts`
-  for every schema change (v2 added `dead_at` + `shape_svg` to
-  `cultivable_zones`).
-- **`cultivable_zones` is fed from `products?product_type=land_parcels`**,
-  not `/api/v2/cultivable_zones` — `client.listCultivableZones()` hits the
-  products endpoint. Rows carry the full production `name`
-  ("Bernessard Blé tendre d'hiver 2026"), `deadAt`, `shapeSvg`,
-  `areaHectares` (parsed from a fractional `net_surface_area`). The
-  target picker (`useCultivableZones`) filters
-  `dead_at IS NULL OR dead_at ≥ today − 1y`; resolve names in the
-  detail view via `useCultivableZonesAll` / `useProductsAll`
-  (unfiltered, by local id).
+  for every schema change (v2 added `dead_at` + `shape_svg`; v3 added
+  `kind` — both on `cultivable_zones`). ⚠️ **Bumping `version` without
+  the matching migration entry passes `tsc` + Jest but crashes on a
+  real device** at boot (`Missing migration. Database schema is
+currently at version N, but migrations only cover range from 1 to
+N-1`) — neither typecheck nor unit tests mount a migrated SQLite DB.
+  The two files must move together. (`schemaMigrations` sorts entries
+  by `toVersion` internally and only requires the covered range to be
+  contiguous and gap-free — declaration order doesn't matter.)
+- **`cultivable_zones` is the unified "targetable" table** (parcelles +
+  cultures), fed from **two** product endpoints, not
+  `/api/v2/cultivable_zones`:
+  - `client.listCultivableZones()` → `products?product_type=land_parcels`
+    (persisted with `kind='land_parcel'`).
+  - `client.listPlants()` → `products?product_type=plants` (plural →
+    `Plant` server-side; persisted with `kind='plant'`). Plant and
+    LandParcel are both `Product`, serialized identically → same DTO
+    (`cultivableZoneListSchema`) and mapper.
+    Rows carry the full production `name`
+    ("Bernessard Blé tendre d'hiver 2026"), `deadAt`, `shapeSvg`,
+    `areaHectares` (parsed from a fractional `net_surface_area`), `kind`.
+- **`persistCultivableZones(db, rows, kind)` scopes delete-extras BY
+  kind** (`Q.or(kind='land_parcel', kind=null)` for parcelles — the
+  `null` includes pre-v3 migrated rows; `Q.where(kind='plant')` for
+  cultures) so persisting one type never deletes the other. `kind` is
+  injected by the persister, not the mapper.
+- **No shape filtering at ingestion** (`spraying.xml` requires `has
+indicator shape`): we ingest all targetables and rely on the
+  server's 403 message (already displayed) if a shape-less target is
+  POSTed. Revisit in P7 if shape-less cultures pollute the picker.
+- The target picker (`useCultivableZones`) returns **both kinds**,
+  filtered `dead_at IS NULL OR dead_at ≥ today − 1y`, sorted by name;
+  the `MultiSelectField` subtitle shows the kind ("Parcelle" /
+  "Culture") + area (`targetSubtitle`). Resolve names in the detail
+  view via `useCultivableZonesAll` / `useProductsAll` (unfiltered, by
+  local id).
 
 ## Native rebuild gate
 
@@ -244,11 +271,13 @@ not `SvgXml` — `SvgXml` rendered blank (fill not reliably applied).
   `SelectField`, and `InputsFieldArray` are integrated via
   `Controller`, not `register()`, because they're controlled
   components with custom value/onChange shape.
-- **Single-element arrays** (`targets`, `doers`, `tools`) are stored
-  as length-0 or length-1 arrays in form state. The view derives the
-  selected item via `find(id)` and `onChange` wraps the item in
+- **Single-element arrays** (`doers`, `tools`) are stored as length-0
+  or length-1 arrays in form state. The view derives the selected item
+  via `find(id)` and `onChange` wraps the item in
   `[{ ..., reference_name: '...' }]`. This keeps the Zod schema
   uniform (always an array) and the persister code simple.
+  **`targets` is multi** (multi-cibles) — same array shape, edited via
+  `MultiSelectField` (`reference_name: 'cultivation'`).
 - **`InputsFieldArray`** is a controlled list editor (no
   `useFieldArray`) — value/onChange propagate from the parent's
   `Controller`. Add/remove rows mutate the array via
@@ -264,6 +293,15 @@ not `SvgXml` — `SvgXml` rendered blank (fill not reliably applied).
   all relations atomically. `client_uuid` is generated **once** at
   creation via `expo-crypto.randomUUID()` and never regenerated (cf.
   ADR-13).
+- **Edit path** — `SprayingFormView` takes `initialValues?` (prefills
+  RHF `defaultValues`, figé at mount → the edit route remounts via a
+  distinct `key`). Route `spraying?id=` calls
+  `updateSprayingIntervention(database, id, input)`: 1 `write` + 1
+  `batch` that `prepareUpdate`s the intervention (keeps `clientUuid` /
+  `serverId`, resets `sync_state='pending'`, clears error/attempt
+  count), deletes all children (`INTERVENTION_CHILD_TABLES`) and
+  recreates them. Edit is gated on `pending`/`error` (UI hides the
+  action otherwise).
 - **Stateful test harness** — when testing a controlled component,
   wrap it in a `useState`-backed `Harness` and expose the captured
   value via `Object.assign(utils, { captured })`. **Avoid**
@@ -323,8 +361,10 @@ End of P6, **validated on-device against a live Ekylibre instance
   - **P6.6 spraying Procedo** — `POST /interventions` for spraying
     raised `nil.unit` / `ActorPresenceTest` / `Division`; fixed core
     side. See `docs/p6.6-ekylibre-spraying-procedo-issue.md`.
-- **Targets = `land_parcels` products** (not `/cultivable_zones`):
-  full production name + `dead_at` + `shape_svg`. Picker filters
+- **Targets = `land_parcels` + `plants` products** (not
+  `/cultivable_zones`): unified `cultivable_zones` table with a `kind`
+  column, full production name + `dead_at` + `shape_svg`. The picker
+  shows **both kinds** (subtitle "Parcelle"/"Culture" + area), filters
   `dead_at IS NULL OR dead_at ≥ today − 1y`. See DB quick-ref below.
 - **Spraying input handlers/units sourced from the API**:
   `/api/v2/procedures` returns enriched handlers `{ name, indicator,
@@ -332,17 +372,33 @@ unit }`; the form locks the unit to the chosen handler (no free
   text). Parser: `src/domain/procedures/spraying-handlers.ts`.
 - **Intervention detail** shows full details (targets with `shape_svg`
   via `ParcelShape`, doers/inputs/tools resolved names + quantities),
-  not just counts. **List** has a "Supprimer" action on non-synced
-  rows (`deleteIntervention`). Edit ("Modifier") is **not** done yet.
-- **WDB schema is v2** (migration adds `dead_at` + `shape_svg` to
-  `cultivable_zones`). **`react-native-svg` added** (native dep — see
-  rebuild gate).
+  not just counts. **List** and **detail** have "Supprimer" **and
+  "Modifier"** actions on non-synced rows (`deleteIntervention` /
+  `updateSprayingIntervention`).
+- **Edit ("Modifier") is implemented** (2026-05-31): route
+  `spraying?id=<localId>` prefills the form via `initialValues`
+  (`toFormValues` from `useInterventionById`) and calls
+  `updateSprayingIntervention` (delete-all-children + recreate, resets
+  `sync_state='pending'`). Allowed **only** while `pending`/`error`
+  (a `synced` row exists server-side — cf. workflow §6.3). ⚠️ The edit
+  route waits for the intervention **and all 4 relations** to load
+  before mounting the form (RHF `defaultValues` is captured once at
+  mount; the children arrive via separate async WDB subscriptions —
+  mounting early would freeze empty arrays and drop targets/inputs).
+- **WDB schema is v3** (migrations add `dead_at` + `shape_svg` in v2,
+  `kind` in v3, all on `cultivable_zones`). **`react-native-svg`
+  added** (native dep — see rebuild gate). ⚠️ The `kind` column means
+  a **catalogue re-sync is required** after this increment (migration
+  is JS-only, no native rebuild needed).
 - **Catalogue map** (interactive parcel picker, MapLibre tiles) and
   **pilot polish** — not yet implemented (P7–P8, see `docs/workflow.md`).
   Note: the map needs **GeoJSON**, but the current target source gives
   only `shape_svg` — a GeoJSON source is still TODO (architecture §9).
 - **Not yet covered**:
-  - "Modifier" (edit an unsynced intervention: prefill form + update).
   - Per-product handler filtering (procedure `if` conditions).
-  - 1 E2E Maestro/Detox scenario (login → save → sync → verify).
+  - Picker shown as a flat list with kind in the subtitle (no section
+    headers grouping parcelles vs cultures — `MultiSelectField` is a
+    generic flat component).
+  - 1 E2E Maestro/Detox scenario (login → save → sync → verify); no
+    unit test yet for the edit route/race (integration-level).
   - Re-run device smoke S2 + S5–S12 (S1/S3/S4 validated 2026-05-30).

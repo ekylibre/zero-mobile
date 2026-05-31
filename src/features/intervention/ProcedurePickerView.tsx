@@ -1,13 +1,23 @@
 import { useTranslation } from 'react-i18next';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native';
 
 import type { Procedure } from '@core/db/models';
-import { EmptyState } from '@ui/index';
+import { EmptyState, ProcedureIcon, colors, fontSize, radius, spacing } from '@ui/index';
 
-// V1 ne sait remplir qu'une seule procédure : `spraying`. On filtre en
-// amont (au lieu de désactiver les autres) pour ne pas inviter
-// l'utilisateur à taper un item sans suite. Au moment où on saura
-// remplir d'autres procédures (P-v1.5+), on étend ce set.
+// V1 ne sait remplir qu'une seule procédure : `spraying`. Contrairement à
+// l'écran d'origine (qui masquait les autres), on reprend la grille complète de
+// l'ancienne app `zero-android-v3` : toutes les procédures du catalogue sont
+// affichées, mais celles non encore prises en charge sont grisées + non
+// cliquables avec une mention « Bientôt » — l'utilisateur voit la cible sans
+// pouvoir taper dans le vide. On étend ce set au fil des procédures livrées.
 const SUPPORTED_PROCEDURES = new Set<string>(['spraying']);
 
 export interface ProcedurePickerViewProps {
@@ -17,55 +27,112 @@ export interface ProcedurePickerViewProps {
 
 export function ProcedurePickerView({ procedures, onSelect }: ProcedurePickerViewProps) {
   const { t } = useTranslation();
-  const supported = procedures.filter((p) => SUPPORTED_PROCEDURES.has(p.name));
 
   return (
     <View style={styles.container}>
       <Text style={styles.subtitle}>{t('interventions.new.subtitle')}</Text>
 
-      <FlatList
-        data={supported}
-        keyExtractor={(item) => item.name}
-        renderItem={({ item }) => (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => onSelect(item.name)}
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            testID={`procedure-row-${item.name}`}
-          >
-            <Text style={styles.rowTitle}>{item.labelFr || item.name}</Text>
-            <Text style={styles.rowChevron}>›</Text>
-          </Pressable>
-        )}
-        ListEmptyComponent={<EmptyState title={t('interventions.new.empty')} />}
-        contentContainerStyle={supported.length === 0 ? styles.emptyContent : undefined}
-        testID="procedure-picker-list"
-      />
+      {procedures.length === 0 ? (
+        <EmptyState title={t('interventions.new.empty')} />
+      ) : (
+        <ScrollView contentContainerStyle={styles.grid} testID="procedure-picker-grid">
+          {procedures.map((item) => (
+            <ProcedureTile
+              key={item.name}
+              procedureName={item.name}
+              label={item.labelFr || item.name}
+              supported={SUPPORTED_PROCEDURES.has(item.name)}
+              comingSoonLabel={t('interventions.new.comingSoon')}
+              onPress={() => onSelect(item.name)}
+            />
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+interface ProcedureTileProps {
+  procedureName: string;
+  label: string;
+  supported: boolean;
+  comingSoonLabel: string;
+  onPress: () => void;
+}
+
+function ProcedureTile({
+  procedureName,
+  label,
+  supported,
+  comingSoonLabel,
+  onPress,
+}: ProcedureTileProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !supported }}
+      disabled={!supported}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.tile,
+        !supported && styles.tileDisabled,
+        pressed && supported && styles.tilePressed,
+      ]}
+      testID={`procedure-tile-${procedureName}`}
+    >
+      <ProcedureIcon procedureName={procedureName} size={56} />
+      <Text style={styles.tileLabel} numberOfLines={2}>
+        {label}
+      </Text>
+      {!supported ? <Text style={styles.comingSoon}>{comingSoonLabel}</Text> : null}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create<{
+  container: ViewStyle;
+  subtitle: TextStyle;
+  grid: ViewStyle;
+  tile: ViewStyle;
+  tileDisabled: ViewStyle;
+  tilePressed: ViewStyle;
+  tileLabel: TextStyle;
+  comingSoon: TextStyle;
+}>({
+  container: { flex: 1, backgroundColor: colors.background },
   subtitle: {
-    fontSize: 13,
-    color: '#666',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
   },
-  row: {
+  grid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-    borderBottomColor: '#eee',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    backgroundColor: '#fff',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xl,
   },
-  rowPressed: { backgroundColor: '#fafafa' },
-  rowTitle: { fontSize: 16, color: '#222', fontWeight: '500' },
-  rowChevron: { fontSize: 22, color: '#999', lineHeight: 22 },
-  emptyContent: { flexGrow: 1 },
+  tile: {
+    width: '33.33%',
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.lg,
+  },
+  tileDisabled: { opacity: 0.4 },
+  tilePressed: { backgroundColor: colors.surface },
+  tileLabel: {
+    fontSize: fontSize.md,
+    color: colors.textPrimary,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+  comingSoon: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: 2,
+  },
 });

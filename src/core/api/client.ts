@@ -164,6 +164,16 @@ export class EkylibreApiClient {
     return cultivableZoneListSchema.parse(raw);
   }
 
+  // Cibles `cultivation` peuvent aussi être des cultures (Plant). Même filtre
+  // serveur que les parcelles : `<target name="cultivation" filter="(is plant
+  // or is land_parcel) and has indicator shape">` (spraying.xml). Les Plant
+  // sont des Product sérialisés à l'identique que les LandParcel → même DTO.
+  // ⚠️ `product_type=plants` (pluriel) → `Plant` côté serveur (singularize).
+  async listPlants(): Promise<CultivableZoneDto[]> {
+    const raw = await this.request<unknown>('/api/v2/products?product_type=plants');
+    return cultivableZoneListSchema.parse(raw);
+  }
+
   async listVariants(): Promise<VariantDto[]> {
     const raw = await this.request<unknown>('/api/v2/variants');
     return variantListSchema.parse(raw);
@@ -220,7 +230,7 @@ export class EkylibreApiClient {
   }
 
   /**
-   * Wrapper autour de `request<T>` qui transforme les 400/412/422 en
+   * Wrapper autour de `request<T>` qui transforme les 400/403/412/422 en
    * ValidationError dédiée. Garde tout le reste du flux (401, 5xx, réseau)
    * inchangé.
    *
@@ -229,12 +239,26 @@ export class EkylibreApiClient {
    * node: ActorPresenceTest`). Le classer en ValidationError garantit que le
    * push-engine le traite comme une erreur **définitive** (pas de retry en
    * boucle, cf. push-engine) et remonte le message serveur à l'écran détail.
+   *
+   * Le 403 est inclus AUSSI : sur cette API v2, une validation de modèle qui
+   * échoue (`save!` → `ActiveRecord::RecordInvalid`) remonte au
+   * `base_controller` via `rescue_from … :rescue_bad_params`, qui répond
+   * **403** avec `{ errors: full_messages }` (ex. « La parcelle … n'existe pas
+   * après le … », dates de culture). Ce n'est PAS un refus d'auth (l'auth
+   * échoue en 401 avec `{ message }`, jamais `{ errors }`) — c'est un rejet de
+   * payload, donc une ValidationError définitive. Sans ça, le 403 tombait en
+   * ApiError générique → outcome `retry` (l'intervention restait `pending`,
+   * message générique, `errors[]` jetés) et l'utilisateur ne voyait jamais le
+   * détail de l'erreur.
    */
   private async requestWithValidation(path: string, init: RequestInit): Promise<unknown> {
     try {
       return await this.request<unknown>(path, init);
     } catch (e) {
-      if (e instanceof ApiError && (e.status === 400 || e.status === 422 || e.status === 412)) {
+      if (
+        e instanceof ApiError &&
+        (e.status === 400 || e.status === 403 || e.status === 422 || e.status === 412)
+      ) {
         throw new ValidationError(e.status, e.message, extractErrors(e.body), e.body);
       }
       throw e;

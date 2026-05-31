@@ -40,6 +40,7 @@ function defaultProps(
     onSync: noop,
     onItemPress: noop,
     onDelete: noop,
+    onEdit: noop,
     onNew: noop,
     ...overrides,
   };
@@ -109,16 +110,12 @@ describe('InterventionsListView', () => {
     expect(screen.queryByTestId('pending-banner')).toBeNull();
   });
 
-  it("affiche l'EmptyState quand la liste est vide, avec le CTA", () => {
-    const onNew = jest.fn();
-
-    render(<InterventionsListView {...defaultProps({ onNew })} />);
+  it("affiche l'EmptyState quand la liste est vide", () => {
+    render(<InterventionsListView {...defaultProps()} />);
 
     expect(screen.getByText("Aucune intervention pour l'instant.")).toBeOnTheScreen();
+    // Plus de FAB : l'action « nouvelle intervention » vit dans la barre basse.
     expect(screen.queryByTestId('interventions-new-fab')).toBeNull();
-
-    fireEvent.press(screen.getByTestId('empty-new-action'));
-    expect(onNew).toHaveBeenCalledTimes(1);
   });
 
   it("appelle onItemPress avec l'intervention quand on tape une ligne", () => {
@@ -149,7 +146,7 @@ describe('InterventionsListView', () => {
     expect(screen.queryByTestId('intervention-row-d-delete')).toBeNull();
   });
 
-  it('affiche le FAB "+" quand la liste n\'est pas vide', () => {
+  it('affiche la barre « Nouvelle intervention » et déclenche onNew', () => {
     const onNew = jest.fn();
 
     render(
@@ -161,7 +158,14 @@ describe('InterventionsListView', () => {
       />,
     );
 
-    fireEvent.press(screen.getByTestId('interventions-new-fab'));
+    fireEvent.press(screen.getByTestId('interventions-new-action'));
+    expect(onNew).toHaveBeenCalledTimes(1);
+  });
+
+  it('affiche la barre « Nouvelle intervention » même quand la liste est vide', () => {
+    const onNew = jest.fn();
+    render(<InterventionsListView {...defaultProps({ onNew })} />);
+    fireEvent.press(screen.getByTestId('interventions-new-action'));
     expect(onNew).toHaveBeenCalledTimes(1);
   });
 

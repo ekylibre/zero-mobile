@@ -1,75 +1,55 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
-import type { Procedure } from '@core/db/models';
 import { initI18n } from '@core/i18n';
+import type { Procedure } from '@core/db/models';
 
 import { ProcedurePickerView } from '../ProcedurePickerView';
 
 initI18n();
 
-function makeProcedure(overrides: Partial<Procedure> & { name: string }): Procedure {
-  return {
-    labelFr: overrides.name,
-    definition: {},
-    updatedAtServer: 0,
-    ...overrides,
-  } as unknown as Procedure;
-}
+// On ne s'appuie que sur `name` + `labelFr` (seuls champs lus par la vue).
+const procedures = [
+  { name: 'spraying', labelFr: 'Pulvérisation' },
+  { name: 'sowing', labelFr: 'Semis' },
+  { name: 'harvesting', labelFr: 'Récolte' },
+] as unknown as Procedure[];
 
 describe('ProcedurePickerView', () => {
-  it('rend une ligne par procédure supportée v1 (spraying)', () => {
-    const procedures = [
-      makeProcedure({ name: 'spraying', labelFr: 'Pulvérisation' }),
-      makeProcedure({ name: 'harvesting', labelFr: 'Récolte' }),
-      makeProcedure({ name: 'sowing', labelFr: 'Semis' }),
-    ];
-
-    render(<ProcedurePickerView procedures={procedures} onSelect={jest.fn()} />);
-
-    expect(screen.getByTestId('procedure-row-spraying')).toBeOnTheScreen();
-    expect(screen.queryByTestId('procedure-row-harvesting')).toBeNull();
-    expect(screen.queryByTestId('procedure-row-sowing')).toBeNull();
-    expect(screen.getByText('Pulvérisation')).toBeOnTheScreen();
+  it('affiche une tuile par procédure du catalogue (grille complète)', () => {
+    render(<ProcedurePickerView procedures={procedures} onSelect={() => {}} />);
+    expect(screen.getByTestId('procedure-tile-spraying')).toBeOnTheScreen();
+    expect(screen.getByTestId('procedure-tile-sowing')).toBeOnTheScreen();
+    expect(screen.getByTestId('procedure-tile-harvesting')).toBeOnTheScreen();
   });
 
-  it('appelle onSelect avec le name de la procédure tapée', () => {
+  it('rend la procédure supportée cliquable et déclenche onSelect', () => {
     const onSelect = jest.fn();
-    render(
-      <ProcedurePickerView
-        procedures={[makeProcedure({ name: 'spraying', labelFr: 'Pulvérisation' })]}
-        onSelect={onSelect}
-      />,
-    );
-
-    fireEvent.press(screen.getByTestId('procedure-row-spraying'));
+    render(<ProcedurePickerView procedures={procedures} onSelect={onSelect} />);
+    fireEvent.press(screen.getByTestId('procedure-tile-spraying'));
     expect(onSelect).toHaveBeenCalledWith('spraying');
   });
 
-  it("affiche l'état vide quand aucune procédure supportée n'est dispo", () => {
-    render(
-      <ProcedurePickerView
-        procedures={[makeProcedure({ name: 'harvesting', labelFr: 'Récolte' })]}
-        onSelect={jest.fn()}
-      />,
-    );
-
-    expect(screen.getByText(/Aucune procédure disponible/i)).toBeOnTheScreen();
+  it('grise + désactive les procédures non supportées et affiche « Bientôt »', () => {
+    render(<ProcedurePickerView procedures={procedures} onSelect={() => {}} />);
+    const sowing = screen.getByTestId('procedure-tile-sowing');
+    expect(sowing.props.accessibilityState.disabled).toBe(true);
+    // Une mention « Bientôt » par tuile non supportée (sowing + harvesting).
+    expect(screen.getAllByText('Bientôt')).toHaveLength(2);
   });
 
-  it("affiche l'état vide quand la liste est totalement vide", () => {
-    render(<ProcedurePickerView procedures={[]} onSelect={jest.fn()} />);
-
-    expect(screen.getByText(/Aucune procédure disponible/i)).toBeOnTheScreen();
+  it('rend la procédure supportée non désactivée', () => {
+    render(<ProcedurePickerView procedures={procedures} onSelect={() => {}} />);
+    const spraying = screen.getByTestId('procedure-tile-spraying');
+    expect(spraying.props.accessibilityState.disabled).toBe(false);
   });
 
-  it('retombe sur le name si labelFr est vide', () => {
-    render(
-      <ProcedurePickerView
-        procedures={[makeProcedure({ name: 'spraying', labelFr: '' })]}
-        onSelect={jest.fn()}
-      />,
-    );
-
-    expect(screen.getByText('spraying')).toBeOnTheScreen();
+  it('affiche un état vide quand aucune procédure', () => {
+    render(<ProcedurePickerView procedures={[]} onSelect={() => {}} />);
+    expect(screen.queryByTestId('procedure-picker-grid')).toBeNull();
+    expect(
+      screen.getByText(
+        'Aucune procédure disponible. Lancez une synchronisation depuis Paramètres.',
+      ),
+    ).toBeOnTheScreen();
   });
 });

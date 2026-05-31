@@ -718,10 +718,10 @@ provider.id)` (2ᵉ POST identique → `200`, même `id`). Pas de GET défensif
    MapTiler, Stadia, Geoportail) selon le quota et les CGU ; à
    trancher avant les premiers builds publics.
 7. ~~**Politique de mises à jour de schéma WDB**~~ — **✅ AMORCÉ
-   (2026-05-30)** : schéma passé en **v2** avec une migration `addColumns`
-   (`src/core/db/migrations.ts`) ajoutant `dead_at` + `shape_svg` sur
-   `cultivable_zones`. Convention : bump `version` dans `schema.ts` + entrée
-   `{ toVersion, steps }` dans `migrations.ts`.
+   (2026-05-30, étendu 2026-05-31)** : schéma en **v3** via migrations
+   `addColumns` (`src/core/db/migrations.ts`) — `dead_at` + `shape_svg` (v2),
+   puis `kind` (v3) sur `cultivable_zones`. Convention : bump `version` dans
+   `schema.ts` + entrée `{ toVersion, steps }` dans `migrations.ts`.
 8. **Multi-comptes (v2)** — documenter dès maintenant comment le
    schéma actuel évoluera (probable ajout d'une table `accounts` et
    d'un `account_id` partout).
@@ -739,6 +739,16 @@ provider.id)` (2ᵉ POST identique → `200`, même `id`). Pas de GET défensif
     `net_surface_area`, `shape_svg`. La table WDB `cultivable_zones` est
     repointée sur cette source (+ colonnes `dead_at`, `shape_svg`). Le picker
     filtre `dead_at IS NULL OU dead_at ≥ aujourd'hui − 1 an`.
+
+12. **Cibles cultures (Plant) + édition** (MAJ 2026-05-31) — la table
+    `cultivable_zones` est désormais **unifiée** (parcelles + cultures) via une
+    colonne `kind` : `?product_type=land_parcels` (`kind='land_parcel'`) **et**
+    `?product_type=plants` (`kind='plant'`). `persistCultivableZones` fait son
+    delete-extras **par kind** (scope `land_parcel` inclut `kind=null` pour les
+    lignes migrées d'avant la v3). Pas de filtrage `has indicator shape` à
+    l'ingestion : on s'appuie sur le 403 serveur (affiché in-app). L'**édition**
+    d'une intervention non synchronisée est possible (route `spraying?id=`,
+    `updateSprayingIntervention`) ; interdite si `synced`.
 
 ## Hand-off
 

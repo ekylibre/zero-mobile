@@ -31,5 +31,8 @@ export class CultivableZone extends Model {
   // Tracé SVG de la parcelle (fourni par products?product_type=land_parcels),
   // affiché dans la vue détail. Null si non fourni.
   @field('shape_svg') shapeSvg!: string | null;
+  // Type de cible : 'land_parcel' (parcelle) | 'plant' (culture). Null sur les
+  // rows antérieures à la v3 → traiter null comme 'land_parcel' à la lecture.
+  @field('kind') kind!: string | null;
   @field('updated_at_server') updatedAtServer!: number;
 }

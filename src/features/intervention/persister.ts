@@ -25,6 +25,91 @@ export interface PersistedSprayingIntervention {
   clientUuid: string;
 }
 
+// Durée travaillée (s) déduite des bornes du formulaire. Jamais négative.
+function durationSecondsOf(input: SprayingIntervention): number {
+  const ms = input.stopped_at.getTime() - input.started_at.getTime();
+  return Math.max(0, Math.round(ms / 1000));
+}
+
+/**
+ * Construit les `prepareCreate` des relations (doers/inputs/targets/tools/
+ * working_period) rattachées à `interventionId`. Partagé entre création et
+ * édition (delete-all + recreate). Ne fait aucune écriture : renvoie les
+ * modèles préparés à pousser dans le `database.batch` de l'appelant.
+ */
+function buildRelationWrites(
+  database: Database,
+  interventionId: string,
+  input: SprayingIntervention,
+  durationSeconds: number,
+): Model[] {
+  const doers = database.collections.get<InterventionDoer>(Tables.interventionDoers);
+  const inputsCol = database.collections.get<InterventionInput>(Tables.interventionInputs);
+  const targets = database.collections.get<InterventionTarget>(Tables.interventionTargets);
+  const tools = database.collections.get<InterventionTool>(Tables.interventionTools);
+  const workingPeriods = database.collections.get<InterventionWorkingPeriod>(
+    Tables.interventionWorkingPeriods,
+  );
+
+  const writes: Model[] = [];
+
+  for (const doer of input.doers) {
+    writes.push(
+      doers.prepareCreate((m: InterventionDoer) => {
+        m.interventionId = interventionId;
+        m.productId = doer.product_id;
+        m.referenceName = doer.reference_name;
+      }),
+    );
+  }
+
+  for (const item of input.inputs) {
+    writes.push(
+      inputsCol.prepareCreate((m: InterventionInput) => {
+        m.interventionId = interventionId;
+        m.productId = item.product_id;
+        m.variantId = item.variant_id ?? null;
+        m.referenceName = item.reference_name;
+        m.quantityValue = item.quantity_value;
+        m.quantityHandler = item.quantity_handler;
+        m.quantityUnit = item.quantity_unit ?? null;
+      }),
+    );
+  }
+
+  for (const target of input.targets) {
+    writes.push(
+      targets.prepareCreate((m: InterventionTarget) => {
+        m.interventionId = interventionId;
+        m.cultivableZoneId = target.cultivable_zone_id;
+        m.referenceName = target.reference_name;
+      }),
+    );
+  }
+
+  for (const tool of input.tools) {
+    writes.push(
+      tools.prepareCreate((m: InterventionTool) => {
+        m.interventionId = interventionId;
+        m.productId = tool.product_id;
+        m.referenceName = tool.reference_name;
+      }),
+    );
+  }
+
+  writes.push(
+    workingPeriods.prepareCreate((m: InterventionWorkingPeriod) => {
+      m.interventionId = interventionId;
+      m.startedAt = input.started_at;
+      m.stoppedAt = input.stopped_at;
+      m.durationSeconds = durationSeconds;
+      m.nature = 'intervention';
+    }),
+  );
+
+  return writes;
+}
+
 /**
  * Persiste un formulaire spraying validé en local : 1 intervention +
  * relations (doers, inputs, target, tools, working_period) dans une
@@ -45,18 +130,9 @@ export async function persistSprayingIntervention(
 ): Promise<PersistedSprayingIntervention> {
   const generate = options.generateUuid ?? generateClientUuid;
   const clientUuid = generate();
-  const startedMs = input.started_at.getTime();
-  const stoppedMs = input.stopped_at.getTime();
-  const durationSeconds = Math.max(0, Math.round((stoppedMs - startedMs) / 1000));
+  const durationSeconds = durationSecondsOf(input);
 
   const interventions = database.collections.get<Intervention>(Tables.interventions);
-  const doers = database.collections.get<InterventionDoer>(Tables.interventionDoers);
-  const inputsCol = database.collections.get<InterventionInput>(Tables.interventionInputs);
-  const targets = database.collections.get<InterventionTarget>(Tables.interventionTargets);
-  const tools = database.collections.get<InterventionTool>(Tables.interventionTools);
-  const workingPeriods = database.collections.get<InterventionWorkingPeriod>(
-    Tables.interventionWorkingPeriods,
-  );
 
   let createdInterventionId = '';
 
@@ -77,66 +153,70 @@ export async function persistSprayingIntervention(
     });
     createdInterventionId = intervention.id;
 
-    const writes: Model[] = [intervention];
-
-    for (const doer of input.doers) {
-      writes.push(
-        doers.prepareCreate((m: InterventionDoer) => {
-          m.interventionId = intervention.id;
-          m.productId = doer.product_id;
-          m.referenceName = doer.reference_name;
-        }),
-      );
-    }
-
-    for (const item of input.inputs) {
-      writes.push(
-        inputsCol.prepareCreate((m: InterventionInput) => {
-          m.interventionId = intervention.id;
-          m.productId = item.product_id;
-          m.variantId = item.variant_id ?? null;
-          m.referenceName = item.reference_name;
-          m.quantityValue = item.quantity_value;
-          m.quantityHandler = item.quantity_handler;
-          m.quantityUnit = item.quantity_unit ?? null;
-        }),
-      );
-    }
-
-    for (const target of input.targets) {
-      writes.push(
-        targets.prepareCreate((m: InterventionTarget) => {
-          m.interventionId = intervention.id;
-          m.cultivableZoneId = target.cultivable_zone_id;
-          m.referenceName = target.reference_name;
-        }),
-      );
-    }
-
-    for (const tool of input.tools) {
-      writes.push(
-        tools.prepareCreate((m: InterventionTool) => {
-          m.interventionId = intervention.id;
-          m.productId = tool.product_id;
-          m.referenceName = tool.reference_name;
-        }),
-      );
-    }
-
-    writes.push(
-      workingPeriods.prepareCreate((m: InterventionWorkingPeriod) => {
-        m.interventionId = intervention.id;
-        m.startedAt = input.started_at;
-        m.stoppedAt = input.stopped_at;
-        m.durationSeconds = durationSeconds;
-        m.nature = 'intervention';
-      }),
-    );
+    const writes: Model[] = [
+      intervention,
+      ...buildRelationWrites(database, intervention.id, input, durationSeconds),
+    ];
 
     await database.batch(...writes);
   });
 
   return { interventionId: createdInterventionId, clientUuid };
+}
+
+/**
+ * Met à jour une intervention NON synchronisée (pending/error) + remplace
+ * toutes ses relations. Stratégie **delete-all + recreate** des enfants (plus
+ * sûr qu'un diff). Le tout dans 1 `database.write` + 1 `database.batch`.
+ *
+ * **Ne touche jamais** `client_uuid` ni `server_id` (ADR-13). Repasse la ligne
+ * en `pending` (sync_error_message null, attempt_count 0) pour qu'elle soit
+ * re-poussée. À n'appeler que sur une intervention `pending`|`error` :
+ * l'édition d'une `synced` est interdite côté UI (cf. workflow §6.3) — la
+ * fonction ne ré-vérifie pas l'état (responsabilité de l'appelant).
+ */
+export async function updateSprayingIntervention(
+  database: Database,
+  interventionId: string,
+  input: SprayingIntervention,
+): Promise<void> {
+  const durationSeconds = durationSecondsOf(input);
+  const interventions = database.collections.get<Intervention>(Tables.interventions);
+
+  await database.write(async () => {
+    const intervention = await interventions.find(interventionId);
+
+    const ops: Model[] = [];
+
+    // 1. Met à jour les champs de l'intervention (sans clientUuid / serverId).
+    ops.push(
+      intervention.prepareUpdate((m: Intervention) => {
+        m.procedureName = input.procedure_name;
+        m.startedAt = input.started_at;
+        m.stoppedAt = input.stopped_at;
+        m.wholeDurationSeconds = durationSeconds;
+        m.workingDurationSeconds = durationSeconds;
+        m.description = input.description?.trim() ? input.description.trim() : null;
+        m.syncState = 'pending';
+        m.syncErrorMessage = null;
+        m.syncAttemptCount = 0;
+      }),
+    );
+
+    // 2. Supprime les relations existantes (delete-all).
+    for (const table of INTERVENTION_CHILD_TABLES) {
+      const children = await database.collections
+        .get(table)
+        .query(Q.where('intervention_id', interventionId))
+        .fetch();
+      ops.push(...children.map((c) => c.prepareDestroyPermanently()));
+    }
+
+    // 3. Recrée les relations depuis l'input (recreate).
+    ops.push(...buildRelationWrites(database, interventionId, input, durationSeconds));
+
+    await database.batch(...ops);
+  });
 }
 
 // Tables enfants à purger avec l'intervention (pas de cascade WDB automatique).

@@ -261,6 +261,33 @@ describe('EkylibreApiClient.createIntervention', () => {
     });
   });
 
+  it('lève ValidationError sur 403 (validation de modèle Ekylibre, rescue_bad_params)', async () => {
+    // Cf. ekylibre base_controller : RecordInvalid → rescue_bad_params répond
+    // 403 { errors: full_messages }. C'est un rejet de payload, PAS un refus
+    // d'auth — doit donc être traité comme ValidationError (définitive).
+    const fetchMock = jest.fn().mockResolvedValue(
+      makeResponse(
+        {
+          errors: [
+            "La parcelle ou culture sélectionné(e) n'existe pas après le 01/04/2026 02:00",
+            'La date de début d’intervention saisie doit être antérieure à la date de fin des cultures sélectionnées (2026-04-01)',
+          ],
+        },
+        { status: 403 },
+      ),
+    );
+    const client = makeAuthClient(fetchMock);
+
+    await expect(client.createIntervention(makePayload())).rejects.toMatchObject({
+      name: 'ValidationError',
+      status: 403,
+      errors: [
+        "La parcelle ou culture sélectionné(e) n'existe pas après le 01/04/2026 02:00",
+        'La date de début d’intervention saisie doit être antérieure à la date de fin des cultures sélectionnées (2026-04-01)',
+      ],
+    });
+  });
+
   it('lève ValidationError sur 412 (precondition)', async () => {
     const fetchMock = jest
       .fn()
