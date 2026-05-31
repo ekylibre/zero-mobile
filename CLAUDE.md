@@ -17,8 +17,10 @@ Read first, in order:
 3. `docs/workflow.md` — phased delivery plan (P0 → P8)
 4. `docs/P0-checklist.md` — external prerequisites (accounts, DSNs)
 
-The repo currently sits at the end of **P6 (sync engine)**.
-P7 (parcels map) is the next phase.
+The repo sits **past P6 (sync engine)** with a post-P6 increment on
+top: spraying-form redesign, cultures-as-targets, intervention edit,
+in-app sync-error messages, and procedure icons (see "Where work
+currently stops"). **P7 (parcels map) is the next phase.**
 
 ## Stack & non-obvious choices
 
@@ -192,7 +194,14 @@ conscious choice (P6 entry in CHANGELOG).
 - **Schema is v3** (2026-05-31): bump `version` in `schema.ts` **and**
   add a `{ toVersion, steps }` entry in `src/core/db/migrations.ts`
   for every schema change (v2 added `dead_at` + `shape_svg`; v3 added
-  `kind` — both on `cultivable_zones`).
+  `kind` — both on `cultivable_zones`). ⚠️ **Bumping `version` without
+  the matching migration entry passes `tsc` + Jest but crashes on a
+  real device** at boot (`Missing migration. Database schema is
+currently at version N, but migrations only cover range from 1 to
+N-1`) — neither typecheck nor unit tests mount a migrated SQLite DB.
+  The two files must move together. (`schemaMigrations` sorts entries
+  by `toVersion` internally and only requires the covered range to be
+  contiguous and gap-free — declaration order doesn't matter.)
 - **`cultivable_zones` is the unified "targetable" table** (parcelles +
   cultures), fed from **two** product endpoints, not
   `/api/v2/cultivable_zones`:
