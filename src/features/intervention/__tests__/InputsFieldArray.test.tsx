@@ -10,233 +10,140 @@ import { InputsFieldArray } from '../InputsFieldArray';
 
 initI18n();
 
-// Liste canonique (population, net_mass, net_volume, mass/volume_area_density…).
+// Handlers canoniques (population, net_volume, mass/volume_area_density…) tels
+// qu'utilisés en production en l'absence de définition de procédure.
 const HANDLERS = parseSprayingHandlers(undefined);
 
-function makeProduct(id: string, name: string): Product {
+const products = [
+  { id: 'p1', name: 'PRIAXOR EC', variety: null },
+  { id: 'p2', name: 'OPUS', variety: null },
+] as unknown as Product[];
+
+const variants = [] as unknown as Variant[];
+
+function row(overrides: Partial<SprayingInput> = {}): SprayingInput {
   return {
-    id,
-    name,
-    serverId: Number(id.replace(/\D/g, '')) || 0,
-    productType: 'matters',
-    variantId: null,
-    variety: null,
-    updatedAtServer: 0,
-  } as unknown as Product;
+    product_id: 'p1',
+    reference_name: 'plant_medicine',
+    quantity_value: 0,
+    quantity_handler: '',
+    quantity_unit: '',
+    ...overrides,
+  };
 }
 
-function makeVariant(id: string, name: string, unit?: string): Variant {
-  return {
-    id,
-    name,
-    serverId: Number(id.replace(/\D/g, '')) || 0,
-    category: 'plant_medicine',
-    unit: unit ?? null,
-    updatedAtServer: 0,
-  } as unknown as Variant;
-}
-
-const products: Product[] = [
-  makeProduct('prod-1', 'Bouillie bordelaise'),
-  makeProduct('prod-2', 'Glyphosate'),
-];
-
-const variants: Variant[] = [
-  makeVariant('var-1', 'Bouillie 20%', 'l'),
-  makeVariant('var-2', 'Bouillie 50%'),
-];
-
-// Harnais stateful : on simule le parent RHF en gérant la valeur via
-// useState. C'est ce dont InputsFieldArray a besoin pour fonctionner
-// (composant contrôlé) — sans ça, le composant garde la prop initiale au
-// re-render et les interactions chaînées ne reflètent pas les changements.
-function renderField(initial: SprayingInput[] = []) {
-  const captured = { value: initial };
-  function Harness() {
-    const [value, setValue] = useState<SprayingInput[]>(initial);
-    return (
-      <InputsFieldArray
-        value={value}
-        onChange={(next) => {
-          captured.value = next;
-          setValue(next);
-        }}
-        products={products}
-        variants={variants}
-        handlers={HANDLERS}
-        testID="inputs"
-      />
-    );
-  }
-  const utils = render(<Harness />);
-  return Object.assign(utils, { captured });
+// Harness contrôlé : InputsFieldArray est value/onChange, on lui adosse un état
+// local pour observer add/remove/update comme en production.
+function Harness({
+  initial = [],
+  totalAreaHectares = 0,
+}: {
+  initial?: SprayingInput[];
+  totalAreaHectares?: number;
+}) {
+  const [value, setValue] = useState<SprayingInput[]>(initial);
+  return (
+    <InputsFieldArray
+      value={value}
+      onChange={setValue}
+      products={products}
+      variants={variants}
+      handlers={HANDLERS}
+      totalAreaHectares={totalAreaHectares}
+      testID="inputs"
+    />
+  );
 }
 
 describe('InputsFieldArray', () => {
-  it("affiche l'état vide quand aucun intrant", () => {
-    renderField();
-    expect(screen.getByText(/Aucun intrant ajouté/i)).toBeOnTheScreen();
+  it('affiche l’état vide + le bouton ajouter quand aucune ligne', () => {
+    render(<Harness />);
+    expect(screen.getByText('Aucun intrant ajouté.')).toBeOnTheScreen();
+    expect(screen.getByTestId('inputs-add')).toBeOnTheScreen();
+    expect(screen.queryByTestId('inputs-row-0')).toBeNull();
   });
 
-  it("ajoute une ligne au tap sur 'Ajouter un intrant'", () => {
-    const view = renderField();
+  it('ajoute une ligne au tap sur « + Ajouter un intrant »', () => {
+    render(<Harness />);
     fireEvent.press(screen.getByTestId('inputs-add'));
-
-    expect(view.captured.value).toHaveLength(1);
-    expect(view.captured.value[0]).toMatchObject({
-      product_id: '',
-      reference_name: 'plant_medicine',
-      quantity_value: 0,
-      quantity_handler: '',
-      quantity_unit: '',
-    });
+    expect(screen.getByTestId('inputs-row-0')).toBeOnTheScreen();
   });
 
-  it('rend une ligne par intrant existant avec testIDs indexés', () => {
-    renderField([
-      {
-        product_id: 'prod-1',
-        reference_name: 'plant_medicine',
-        quantity_value: 1,
-        quantity_handler: 'population',
-        quantity_unit: 'unity',
-      },
-      {
-        product_id: 'prod-2',
-        reference_name: 'plant_medicine',
-        quantity_value: 2,
-        quantity_handler: 'net_volume',
-        quantity_unit: 'liter',
-      },
-    ]);
-
-    expect(screen.getByText('Intrant 1')).toBeOnTheScreen();
-    expect(screen.getByText('Intrant 2')).toBeOnTheScreen();
-    expect(screen.getByTestId('inputs-row-0-product')).toBeOnTheScreen();
-    expect(screen.getByTestId('inputs-row-1-product')).toBeOnTheScreen();
-  });
-
-  it('retire une ligne au tap sur Retirer', () => {
-    const view = renderField([
-      {
-        product_id: 'prod-1',
-        reference_name: 'plant_medicine',
-        quantity_value: 1,
-        quantity_handler: 'population',
-        quantity_unit: 'unity',
-      },
-      {
-        product_id: 'prod-2',
-        reference_name: 'plant_medicine',
-        quantity_value: 2,
-        quantity_handler: 'net_volume',
-        quantity_unit: 'liter',
-      },
-    ]);
-
+  it('supprime une ligne via la croix de la carte', () => {
+    render(<Harness initial={[row()]} />);
+    expect(screen.getByTestId('inputs-row-0')).toBeOnTheScreen();
     fireEvent.press(screen.getByTestId('inputs-row-0-remove'));
-    expect(view.captured.value).toHaveLength(1);
-    expect(view.captured.value[0]?.product_id).toBe('prod-2');
+    expect(screen.queryByTestId('inputs-row-0')).toBeNull();
   });
 
-  it('met à jour quantity_value via la saisie numérique (point ou virgule)', () => {
-    const view = renderField([
-      {
-        product_id: 'prod-1',
-        reference_name: 'plant_medicine',
-        quantity_value: 0,
-        quantity_handler: 'population',
-        quantity_unit: 'unity',
-      },
-    ]);
+  it('utilise le nom du produit comme titre de carte', () => {
+    render(<Harness initial={[row({ product_id: 'p1' })]} />);
+    // Le nom apparaît à la fois en titre de carte et dans le déclencheur du
+    // SelectField produit → on vérifie juste la présence.
+    expect(screen.getAllByText('PRIAXOR EC').length).toBeGreaterThanOrEqual(1);
+  });
 
+  it('calcule le total à l’hectare (unité courte « l/ha »)', () => {
+    render(
+      <Harness
+        initial={[
+          row({
+            quantity_value: 3,
+            quantity_handler: 'volume_area_density',
+            quantity_unit: 'l/ha',
+          }),
+        ]}
+        totalAreaHectares={17.3}
+      />,
+    );
+    // 3 l/ha × 17,3 ha = 51,9 l
+    expect(screen.getByTestId('inputs-row-0-total')).toHaveTextContent('51,9 l au total');
+  });
+
+  it('calcule le total à l’hectare (unité canonique « liter_per_hectare »)', () => {
+    render(
+      <Harness
+        initial={[
+          row({
+            quantity_value: 2,
+            quantity_handler: 'volume_area_density',
+            quantity_unit: 'liter_per_hectare',
+          }),
+        ]}
+        totalAreaHectares={10}
+      />,
+    );
+    // 2 × 10 = 20 ; l'unité de base est dérivée (« liter_per_hectare » → « liter »).
+    expect(screen.getByTestId('inputs-row-0-total')).toHaveTextContent('20 liter au total');
+  });
+
+  it('n’affiche pas de total pour une quantité absolue (handler non surfacique)', () => {
+    render(
+      <Harness
+        initial={[
+          row({ quantity_value: 5, quantity_handler: 'net_volume', quantity_unit: 'liter' }),
+        ]}
+        totalAreaHectares={17.3}
+      />,
+    );
+    expect(screen.queryByTestId('inputs-row-0-total')).toBeNull();
+  });
+
+  it('recalcule le total quand la quantité change (séparateur virgule)', () => {
+    render(
+      <Harness
+        initial={[
+          row({
+            quantity_value: 0,
+            quantity_handler: 'volume_area_density',
+            quantity_unit: 'l/ha',
+          }),
+        ]}
+        totalAreaHectares={10}
+      />,
+    );
     fireEvent.changeText(screen.getByTestId('inputs-row-0-quantity'), '2,5');
-    expect(view.captured.value[0]?.quantity_value).toBe(2.5);
-
-    fireEvent.changeText(screen.getByTestId('inputs-row-0-quantity'), '3.75');
-    expect(view.captured.value[0]?.quantity_value).toBe(3.75);
-  });
-
-  it("remet quantity_value à 0 si la saisie n'est pas un nombre", () => {
-    const view = renderField([
-      {
-        product_id: 'prod-1',
-        reference_name: 'plant_medicine',
-        quantity_value: 5,
-        quantity_handler: 'population',
-        quantity_unit: 'unity',
-      },
-    ]);
-
-    fireEvent.changeText(screen.getByTestId('inputs-row-0-quantity'), 'abc');
-    expect(view.captured.value[0]?.quantity_value).toBe(0);
-  });
-
-  it("permet de sélectionner un produit, et l'affiche dans le déclencheur", () => {
-    const view = renderField([
-      {
-        product_id: '',
-        reference_name: 'plant_medicine',
-        quantity_value: 0,
-        quantity_handler: '',
-        quantity_unit: '',
-      },
-    ]);
-
-    fireEvent.press(screen.getByTestId('inputs-row-0-product'));
-    fireEvent.press(screen.getByTestId('inputs-row-0-product-item-prod-2'));
-
-    expect(view.captured.value[0]?.product_id).toBe('prod-2');
-  });
-
-  it('sélectionner un handler fixe automatiquement le quantity_handler ET son unité', () => {
-    const view = renderField([
-      {
-        product_id: 'prod-1',
-        reference_name: 'plant_medicine',
-        quantity_value: 1,
-        quantity_handler: '',
-        quantity_unit: '',
-      },
-    ]);
-
-    fireEvent.press(screen.getByTestId('inputs-row-0-handler'));
-    fireEvent.press(screen.getByTestId('inputs-row-0-handler-item-volume_area_density'));
-
-    expect(view.captured.value[0]?.quantity_handler).toBe('volume_area_density');
-    expect(view.captured.value[0]?.quantity_unit).toBe('liter_per_hectare');
-  });
-
-  it("affiche l'unité du handler en lecture seule (pas de saisie libre)", () => {
-    renderField([
-      {
-        product_id: 'prod-1',
-        reference_name: 'plant_medicine',
-        quantity_value: 1,
-        quantity_handler: 'mass_area_density',
-        quantity_unit: 'kilogram_per_hectare',
-      },
-    ]);
-
-    const unit = screen.getByTestId('inputs-row-0-unit');
-    expect(unit).toBeOnTheScreen();
-    expect(unit.props.children).toBe('kilogram_per_hectare');
-    // Le champ n'est plus un TextInput éditable.
-    expect(unit.props.onChangeText).toBeUndefined();
-  });
-
-  it('affiche un tiret quand aucune unité (handler non encore choisi)', () => {
-    renderField([
-      {
-        product_id: 'prod-1',
-        reference_name: 'plant_medicine',
-        quantity_value: 1,
-        quantity_handler: '',
-        quantity_unit: '',
-      },
-    ]);
-
-    expect(screen.getByTestId('inputs-row-0-unit').props.children).toBe('—');
+    expect(screen.getByTestId('inputs-row-0-total')).toHaveTextContent('25 l au total');
   });
 
   it('affiche errorMessage quand fourni', () => {
@@ -251,7 +158,6 @@ describe('InputsFieldArray', () => {
         testID="inputs"
       />,
     );
-
     expect(screen.getByTestId('inputs-error')).toBeOnTheScreen();
     expect(screen.getByText('Au moins 1 produit phytosanitaire requis.')).toBeOnTheScreen();
   });

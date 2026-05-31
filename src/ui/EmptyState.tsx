@@ -1,6 +1,8 @@
 import { type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { colors } from './theme';
+
 interface EmptyStateProps {
   title: string;
   subtitle?: string;
@@ -24,7 +26,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 32,
   },
-  title: { fontSize: 16, color: '#444', textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 13, color: '#888', textAlign: 'center' },
+  title: { fontSize: 16, color: colors.textSecondary, textAlign: 'center', marginBottom: 8 },
+  subtitle: { fontSize: 13, color: colors.textMuted, textAlign: 'center' },
   action: { marginTop: 24 },
 });

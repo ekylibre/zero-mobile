@@ -4,11 +4,20 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'rea
 
 import type { Intervention } from '@core/db/models';
 import type { SyncStatus } from '@core/sync/store';
-import { EmptyState, InterventionListItem } from '@ui/index';
+import {
+  BottomActionBar,
+  EmptyState,
+  InterventionListItem,
+  colors,
+  fontSize,
+  spacing,
+} from '@ui/index';
 
 export interface InterventionsListViewProps {
   interventions: Intervention[];
   procedureLabels: Map<string, string>;
+  /** Résumé « N cultures • X ha » par id d'intervention (calculé côté route). */
+  targetSummaries?: Map<string, string>;
   pendingCount: number;
   errorCount: number;
   syncStatus: SyncStatus;
@@ -28,6 +37,7 @@ export interface InterventionsListViewProps {
 export function InterventionsListView({
   interventions,
   procedureLabels,
+  targetSummaries,
   pendingCount,
   errorCount,
   syncStatus,
@@ -96,12 +106,14 @@ export function InterventionsListView({
       ) : null}
 
       <FlatList
+        style={styles.list}
         data={interventions}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <InterventionListItem
             intervention={item}
             procedureLabel={procedureLabels.get(item.procedureName)}
+            targetSummary={targetSummaries?.get(item.id)}
             onPress={() => onItemPress(item)}
             onDelete={() => onDelete(item)}
           />
@@ -112,106 +124,69 @@ export function InterventionsListView({
           <EmptyState
             title={t('interventions.list.empty')}
             subtitle={t('interventions.list.emptySubtitle')}
-            action={
-              <Pressable
-                onPress={onNew}
-                style={styles.emptyCta}
-                accessibilityRole="button"
-                testID="empty-new-action"
-              >
-                <Text style={styles.emptyCtaText}>{t('interventions.list.newAction')}</Text>
-              </Pressable>
-            }
           />
         }
         testID="interventions-list"
       />
 
-      {interventions.length > 0 ? (
-        <Pressable
-          style={styles.fab}
-          accessibilityRole="button"
-          accessibilityLabel={t('interventions.list.newAction')}
-          onPress={onNew}
-          testID="interventions-new-fab"
-        >
-          <Text style={styles.fabText}>+</Text>
-        </Pressable>
-      ) : null}
+      <BottomActionBar
+        primary={{
+          label: t('interventions.list.newAction'),
+          onPress: onNew,
+          testID: 'interventions-new-action',
+        }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: colors.background },
+  list: { flex: 1 },
   syncHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomColor: '#eee',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomColor: colors.divider,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 12,
+    gap: spacing.md,
   },
   syncHeaderLeft: { flex: 1 },
-  syncStatus: { fontSize: 13, color: '#444', fontWeight: '500' },
-  lastSync: { fontSize: 11, color: '#888', marginTop: 2 },
+  syncStatus: { fontSize: fontSize.md, color: colors.textPrimary, fontWeight: '500' },
+  lastSync: { fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
   syncButton: {
-    backgroundColor: '#0066cc',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    backgroundColor: colors.blue,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
     borderRadius: 6,
   },
   syncButtonPressed: { opacity: 0.6 },
-  syncButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  syncButtonText: { color: colors.textOnBrand, fontSize: fontSize.base, fontWeight: '600' },
   errorBanner: {
-    backgroundColor: '#fde6e6',
-    borderBottomColor: '#a3171c',
+    backgroundColor: colors.dangerBg,
+    borderBottomColor: colors.danger,
     borderBottomWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
   },
-  errorBannerText: { color: '#5a0c10', fontSize: 13, fontWeight: '500' },
+  errorBannerText: { color: colors.dangerText, fontSize: fontSize.md, fontWeight: '500' },
   syncErrorBanner: {
-    backgroundColor: '#fff0f0',
-    borderBottomColor: '#a3171c',
+    backgroundColor: colors.dangerSoft,
+    borderBottomColor: colors.danger,
     borderBottomWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
   },
-  syncErrorText: { color: '#5a0c10', fontSize: 12 },
+  syncErrorText: { color: colors.dangerText, fontSize: fontSize.sm },
   pendingBanner: {
-    backgroundColor: '#fff7e6',
-    borderBottomColor: '#f0c36d',
+    backgroundColor: colors.warningBg,
+    borderBottomColor: colors.warningBorder,
     borderBottomWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
   },
-  pendingBannerText: { color: '#7a4f00', fontSize: 13, fontWeight: '500' },
+  pendingBannerText: { color: colors.warning, fontSize: fontSize.md, fontWeight: '500' },
   emptyContent: { flexGrow: 1 },
-  emptyCta: {
-    backgroundColor: '#0066cc',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 6,
-  },
-  emptyCtaText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  fab: {
-    position: 'absolute',
-    right: 24,
-    bottom: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#0066cc',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
-  },
-  fabText: { color: '#fff', fontSize: 28, fontWeight: '600', lineHeight: 30 },
 });

@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { colors } from './theme';
+
 export type DateTimeMode = 'date' | 'time' | 'datetime';
 
 export interface DateTimeFieldProps {
@@ -137,14 +139,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderColor: '#ddd',
+    borderColor: colors.borderStrong,
     borderWidth: 1,
     borderRadius: 6,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
-  triggerPressed: { backgroundColor: '#fafafa' },
-  triggerError: { borderColor: '#a3171c' },
-  triggerLabel: { fontSize: 14, color: '#666' },
-  triggerValue: { fontSize: 14, color: '#222', fontWeight: '500' },
-  error: { fontSize: 12, color: '#a3171c', marginTop: 4 },
+  triggerPressed: { backgroundColor: colors.surface },
+  triggerError: { borderColor: colors.danger },
+  triggerLabel: { fontSize: 14, color: colors.textSecondary },
+  triggerValue: { fontSize: 14, color: colors.textPrimary, fontWeight: '500' },
+  error: { fontSize: 12, color: colors.danger, marginTop: 4 },
 });

@@ -13,7 +13,10 @@
   "select": {
     "searchHint": "Rechercher…",
     "noResults": "Aucun résultat.",
-    "empty": "Aucune entrée disponible."
+    "empty": "Aucune entrée disponible.",
+    "validate": "Valider",
+    "selectedCount_one": "{{count}} sélectionné",
+    "selectedCount_other": "{{count}} sélectionnés"
   },
   "tabs": {
     "interventions": "Interventions",
@@ -64,6 +67,8 @@
       "empty": "Aucune intervention pour l'instant.",
       "emptySubtitle": "Démarrez une nouvelle intervention pour la voir apparaître ici.",
       "newAction": "+ Nouvelle intervention",
+      "today": "aujourd'hui",
+      "yesterday": "hier",
       "pendingBanner_one": "{{count}} intervention à synchroniser",
       "pendingBanner_other": "{{count}} interventions à synchroniser",
       "errorBanner_one": "{{count}} intervention en erreur. Ouvrez-la pour voir le détail.",
@@ -84,7 +89,8 @@
       "title": "Nouvelle intervention",
       "subtitle": "Choisissez le type d'intervention à enregistrer.",
       "empty": "Aucune procédure disponible. Lancez une synchronisation depuis Paramètres.",
-      "unsupported": "Cette procédure n'est pas encore prise en charge sur mobile."
+      "unsupported": "Cette procédure n'est pas encore prise en charge sur mobile.",
+      "comingSoon": "Bientôt"
     },
     "spraying": {
       "title": "Pulvérisation",
@@ -128,7 +134,19 @@
         "quantityPlaceholder": "0",
         "handlerLabel": "Mesure",
         "handlerPlaceholder": "Choisir une mesure…",
-        "unitLabel": "Unité"
+        "unitLabel": "Unité",
+        "total": "{{value}} {{unit}} au total"
+      },
+      "summaries": {
+        "empty": "—",
+        "targets_one": "{{count}} culture • {{area}} ha",
+        "targets_other": "{{count}} cultures • {{area}} ha",
+        "inputs_one": "{{count}} intrant",
+        "inputs_other": "{{count}} intrants",
+        "dates": "{{date}} • {{duration}}",
+        "durationMinutes": "{{minutes}} min",
+        "durationHours": "{{hours}} h",
+        "durationHoursMinutes": "{{hours}} h {{minutes}}"
       },
       "handlers": {
         "population": "Population (unité)",

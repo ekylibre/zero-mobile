@@ -1,18 +1,18 @@
 import { useTranslation } from 'react-i18next';
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type TextStyle,
-  type ViewStyle,
-} from 'react-native';
+import { StyleSheet, Text, TextInput, View, type TextStyle, type ViewStyle } from 'react-native';
 
 import type { Product, Variant } from '@core/db/models';
 import type { SprayingInput } from '@domain/procedures/spraying';
 import type { SprayingHandlerOption } from '@domain/procedures/spraying-handlers';
-import { SelectField } from '@ui/index';
+import {
+  InlineAddButton,
+  ItemCard,
+  SelectField,
+  colors,
+  fontSize,
+  radius,
+  spacing,
+} from '@ui/index';
 
 export interface InputsFieldArrayProps {
   value: SprayingInput[];
@@ -23,6 +23,11 @@ export interface InputsFieldArrayProps {
   variants: Variant[];
   /** Handlers (mesure + unité) issus de la définition de procédure. */
   handlers: SprayingHandlerOption[];
+  /**
+   * Surface totale des cibles (ha) — somme des cibles sélectionnées. Utilisée
+   * pour calculer le « X l au total » des doses à l'hectare. 0 si non calculable.
+   */
+  totalAreaHectares?: number;
   /** Erreur agrégée Zod au niveau du tableau (« min 1 required »). */
   errorMessage?: string | null;
   testID?: string;
@@ -41,6 +46,7 @@ export function InputsFieldArray({
   products,
   variants,
   handlers,
+  totalAreaHectares = 0,
   errorMessage,
   testID,
 }: InputsFieldArrayProps) {
@@ -89,6 +95,7 @@ export function InputsFieldArray({
           products={products}
           variants={variants}
           handlerOptions={handlerOptions}
+          totalAreaHectares={totalAreaHectares}
           onUpdate={(patch) => updateRow(index, patch)}
           onRemove={() => removeRow(index)}
           testID={testID ? `${testID}-row-${index}` : undefined}
@@ -101,14 +108,11 @@ export function InputsFieldArray({
         </Text>
       ) : null}
 
-      <Pressable
-        accessibilityRole="button"
+      <InlineAddButton
+        label={t('interventions.spraying.inputs.addAction')}
         onPress={addRow}
-        style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
         testID={testID ? `${testID}-add` : undefined}
-      >
-        <Text style={styles.addButtonText}>{t('interventions.spraying.inputs.addAction')}</Text>
-      </Pressable>
+      />
     </View>
   );
 }
@@ -119,6 +123,7 @@ interface InputRowProps {
   products: Product[];
   variants: Variant[];
   handlerOptions: HandlerOption[];
+  totalAreaHectares: number;
   onUpdate: (patch: Partial<SprayingInput>) => void;
   onRemove: () => void;
   testID?: string;
@@ -130,6 +135,7 @@ function InputRow({
   products,
   variants,
   handlerOptions,
+  totalAreaHectares,
   onUpdate,
   onRemove,
   testID,
@@ -146,24 +152,23 @@ function InputRow({
     ? (handlerOptions.find((h) => h.value === row.quantity_handler) ?? null)
     : null;
 
-  return (
-    <View style={styles.row}>
-      <View style={styles.rowHeader}>
-        <Text style={styles.rowTitle}>
-          {t('interventions.spraying.inputs.rowTitle', { index: index + 1 })}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onRemove}
-          style={({ pressed }) => [styles.removeButton, pressed && styles.removeButtonPressed]}
-          testID={testID ? `${testID}-remove` : undefined}
-        >
-          <Text style={styles.removeButtonText}>
-            {t('interventions.spraying.inputs.removeAction')}
-          </Text>
-        </Pressable>
-      </View>
+  const total = computeAreaTotal(
+    row.quantity_handler,
+    row.quantity_unit,
+    row.quantity_value,
+    totalAreaHectares,
+  );
 
+  return (
+    <ItemCard
+      title={
+        selectedProduct?.name ?? t('interventions.spraying.inputs.rowTitle', { index: index + 1 })
+      }
+      subtitle={selectedVariant?.name ?? null}
+      onRemove={onRemove}
+      removeAccessibilityLabel={t('interventions.spraying.inputs.removeAction')}
+      testID={testID}
+    >
       <SelectField<Product>
         label={t('interventions.spraying.inputs.productLabel')}
         items={products}
@@ -232,19 +237,50 @@ function InputRow({
           {row.quantity_unit ? row.quantity_unit : '—'}
         </Text>
       </View>
-    </View>
+
+      {total ? (
+        <Text style={styles.total} testID={testID ? `${testID}-total` : undefined}>
+          {t('interventions.spraying.inputs.total', {
+            value: formatQuantity(total.value),
+            unit: total.unit,
+          })}
+        </Text>
+      ) : null}
+    </ItemCard>
   );
+}
+
+// Total à l'hectare : ne s'applique qu'aux doses surfaciques. Une dose est
+// surfacique si son handler est `*_area_density` OU si son unité est par
+// hectare (forme courte API « l/ha » ou forme canonique « liter_per_hectare »).
+// Pour une quantité absolue (« l », « kg », « unity ») le total = la quantité
+// saisie : on n'affiche pas de ligne redondante.
+//
+// L'unité du total est l'unité de base (sans le « par hectare ») : « l/ha » →
+// « l », « liter_per_hectare » → « liter ». On reste sur l'unité brute (comme
+// le reste de l'app) ; une éventuelle jolification des unités est globale (P-G).
+function computeAreaTotal(
+  handlerName: string,
+  unit: string | undefined,
+  quantity: number,
+  areaHectares: number,
+): { value: number; unit: string } | null {
+  const isAreaDensity = handlerName.endsWith('_area_density') || (unit?.endsWith('/ha') ?? false);
+  if (!isAreaDensity) return null;
+  if (!(quantity > 0) || !(areaHectares > 0)) return null;
+  let base = unit ?? '';
+  if (base.endsWith('_per_hectare')) base = base.slice(0, -'_per_hectare'.length);
+  else if (base.endsWith('/ha')) base = base.slice(0, -3);
+  return { value: quantity * areaHectares, unit: base };
+}
+
+function formatQuantity(value: number): string {
+  return value.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
 }
 
 const styles = StyleSheet.create<{
   empty: ViewStyle;
   emptyText: TextStyle;
-  row: ViewStyle;
-  rowHeader: ViewStyle;
-  rowTitle: TextStyle;
-  removeButton: ViewStyle;
-  removeButtonPressed: ViewStyle;
-  removeButtonText: TextStyle;
   quantityRow: ViewStyle;
   quantityValue: ViewStyle;
   quantityHandler: ViewStyle;
@@ -252,80 +288,51 @@ const styles = StyleSheet.create<{
   numericInput: TextStyle;
   unitWrap: ViewStyle;
   unitValue: TextStyle;
-  addButton: ViewStyle;
-  addButtonPressed: ViewStyle;
-  addButtonText: TextStyle;
+  total: TextStyle;
   error: TextStyle;
 }>({
   empty: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 6,
-    padding: 12,
-    marginBottom: 8,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
   },
-  emptyText: { fontSize: 13, color: '#888', fontStyle: 'italic', textAlign: 'center' },
-  row: {
-    backgroundColor: '#fafafa',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    borderColor: '#e5e5e5',
-    borderWidth: 1,
+  emptyText: {
+    fontSize: fontSize.md,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
-  rowHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  rowTitle: { fontSize: 14, fontWeight: '600', color: '#444' },
-  removeButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 4,
-  },
-  removeButtonPressed: { backgroundColor: '#fde6e6' },
-  removeButtonText: { fontSize: 13, color: '#a3171c', fontWeight: '500' },
-  quantityRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
-  },
+  quantityRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   quantityValue: { flex: 1 },
   quantityHandler: { flex: 2 },
-  fieldLabel: { fontSize: 12, color: '#888', marginBottom: 4, marginTop: 4 },
+  fieldLabel: { fontSize: fontSize.sm, color: colors.textMuted, marginBottom: 4, marginTop: 4 },
   numericInput: {
-    borderColor: '#ddd',
+    borderColor: colors.borderStrong,
     borderWidth: 1,
-    borderRadius: 6,
-    paddingVertical: 12,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
     paddingHorizontal: 14,
-    fontSize: 14,
-    color: '#222',
-    backgroundColor: '#fff',
+    fontSize: fontSize.base,
+    color: colors.textPrimary,
+    backgroundColor: colors.background,
   },
-  unitWrap: { marginTop: 4 },
+  unitWrap: { marginTop: spacing.xs },
   unitValue: {
-    borderColor: '#eee',
+    borderColor: colors.divider,
     borderWidth: 1,
-    borderRadius: 6,
-    paddingVertical: 12,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
     paddingHorizontal: 14,
-    fontSize: 14,
-    color: '#555',
-    backgroundColor: '#f5f5f5',
+    fontSize: fontSize.base,
+    color: colors.textSecondary,
+    backgroundColor: colors.surfaceAlt,
   },
-  addButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 6,
-    borderColor: '#0066cc',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    marginTop: 4,
+  total: {
+    marginTop: spacing.sm,
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    textAlign: 'right',
   },
-  addButtonPressed: { backgroundColor: '#eef6ff' },
-  addButtonText: { color: '#0066cc', fontSize: 14, fontWeight: '600' },
-  error: { fontSize: 12, color: '#a3171c', marginTop: 4, marginBottom: 4 },
+  error: { fontSize: fontSize.sm, color: colors.danger, marginTop: 4, marginBottom: 4 },
 });

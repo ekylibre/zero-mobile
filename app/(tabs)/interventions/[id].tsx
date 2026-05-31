@@ -11,10 +11,19 @@ import {
   useProductsAll,
   useVariants,
 } from '@features/catalog/hooks';
-import { ParcelShape, SyncBadge } from '@ui/index';
+import {
+  ItemCard,
+  ParcelShape,
+  ProcedureIcon,
+  SyncBadge,
+  colors,
+  fontSize,
+  radius,
+  spacing,
+} from '@ui/index';
 
 import { database } from '@core/db/database';
-import type { Intervention, Product } from '@core/db/models';
+import type { Intervention } from '@core/db/models';
 import { Tables } from '@core/db/schema';
 
 export default function InterventionDetailScreen() {
@@ -33,6 +42,16 @@ export default function InterventionDetailScreen() {
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const zoneById = useMemo(() => new Map(zones.map((z) => [z.id, z])), [zones]);
   const variantById = useMemo(() => new Map(variants.map((v) => [v.id, v])), [variants]);
+
+  // Surface totale des cibles (somme), pour le total des intrants à l'hectare.
+  const totalAreaHectares = useMemo(
+    () =>
+      detail.targets.reduce((sum, target) => {
+        const zone = zoneById.get(target.cultivableZoneId);
+        return sum + (zone?.areaHectares ?? 0);
+      }, 0),
+    [detail.targets, zoneById],
+  );
 
   if (!detail.intervention) {
     return (
@@ -75,7 +94,10 @@ export default function InterventionDetailScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <Text style={styles.heading}>{procedure?.labelFr ?? intervention.procedureName}</Text>
+        <ProcedureIcon procedureName={intervention.procedureName} size={44} />
+        <Text style={styles.heading} numberOfLines={1}>
+          {procedure?.labelFr ?? intervention.procedureName}
+        </Text>
         <SyncBadge state={intervention.syncState} />
       </View>
 
@@ -123,33 +145,36 @@ export default function InterventionDetailScreen() {
           detail.targets.map((target) => {
             const zone = zoneById.get(target.cultivableZoneId);
             return (
-              <View key={target.id} style={styles.parcelItem} testID={`detail-target-${target.id}`}>
-                <ParcelShape svg={zone?.shapeSvg ?? null} />
-                <View style={styles.parcelInfo}>
-                  <Text style={styles.itemName}>
-                    {zone?.name ?? t('interventions.detail.unknownItem')}
-                  </Text>
-                  {zone?.areaHectares != null ? (
-                    <Text style={styles.itemSub}>
-                      {t('interventions.spraying.areaHectares', {
+              <ItemCard
+                key={target.id}
+                leading={<ParcelShape svg={zone?.shapeSvg ?? null} />}
+                title={zone?.name ?? t('interventions.detail.unknownItem')}
+                subtitle={
+                  zone?.areaHectares != null
+                    ? t('interventions.spraying.areaHectares', {
                         value: formatHectares(zone.areaHectares),
-                      })}
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
+                      })
+                    : null
+                }
+                testID={`detail-target-${target.id}`}
+              />
             );
           })
         )}
       </Section>
 
       <Section title={t('interventions.detail.doers')}>
-        <ProductList
-          rows={detail.doers}
-          productById={productById}
-          emptyLabel={t('interventions.detail.emptyList')}
-          unknownLabel={t('interventions.detail.unknownItem')}
-        />
+        {detail.doers.length === 0 ? (
+          <Text style={styles.muted}>{t('interventions.detail.emptyList')}</Text>
+        ) : (
+          detail.doers.map((doer) => (
+            <ItemCard
+              key={doer.id}
+              title={productById.get(doer.productId)?.name ?? t('interventions.detail.unknownItem')}
+              testID={`detail-row-${doer.id}`}
+            />
+          ))
+        )}
       </Section>
 
       <Section title={t('interventions.detail.inputs')}>
@@ -161,28 +186,45 @@ export default function InterventionDetailScreen() {
             const variant = input.variantId ? variantById.get(input.variantId) : null;
             const quantity =
               `${formatQuantity(input.quantityValue)} ${input.quantityUnit ?? ''}`.trim();
+            const total = inputAreaTotal(
+              input.quantityHandler,
+              input.quantityUnit,
+              input.quantityValue,
+              totalAreaHectares,
+            );
             return (
-              <View key={input.id} style={styles.listItem} testID={`detail-input-${input.id}`}>
-                <Text style={styles.itemName}>
-                  {product?.name ?? t('interventions.detail.unknownItem')}
-                </Text>
-                <Text style={styles.itemSub}>
-                  {quantity}
-                  {variant ? ` · ${variant.name}` : ''}
-                </Text>
-              </View>
+              <ItemCard
+                key={input.id}
+                title={product?.name ?? t('interventions.detail.unknownItem')}
+                subtitle={`${quantity}${variant ? ` · ${variant.name}` : ''}`}
+                testID={`detail-input-${input.id}`}
+              >
+                {total ? (
+                  <Text style={styles.total}>
+                    {t('interventions.spraying.inputs.total', {
+                      value: formatQuantity(total.value),
+                      unit: total.unit,
+                    })}
+                  </Text>
+                ) : null}
+              </ItemCard>
             );
           })
         )}
       </Section>
 
       <Section title={t('interventions.detail.tools')}>
-        <ProductList
-          rows={detail.tools}
-          productById={productById}
-          emptyLabel={t('interventions.detail.emptyList')}
-          unknownLabel={t('interventions.detail.unknownItem')}
-        />
+        {detail.tools.length === 0 ? (
+          <Text style={styles.muted}>{t('interventions.detail.emptyList')}</Text>
+        ) : (
+          detail.tools.map((tool) => (
+            <ItemCard
+              key={tool.id}
+              title={productById.get(tool.productId)?.name ?? t('interventions.detail.unknownItem')}
+              testID={`detail-row-${tool.id}`}
+            />
+          ))
+        )}
       </Section>
     </ScrollView>
   );
@@ -211,31 +253,6 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ProductList({
-  rows,
-  productById,
-  emptyLabel,
-  unknownLabel,
-}: {
-  rows: { id: string; productId: string }[];
-  productById: Map<string, Product>;
-  emptyLabel: string;
-  unknownLabel: string;
-}) {
-  if (rows.length === 0) return <Text style={styles.muted}>{emptyLabel}</Text>;
-  return (
-    <>
-      {rows.map((row) => (
-        <View key={row.id} style={styles.listItem} testID={`detail-row-${row.id}`}>
-          <Text style={styles.itemName}>
-            {productById.get(row.productId)?.name ?? unknownLabel}
-          </Text>
-        </View>
-      ))}
-    </>
-  );
-}
-
 // Hectares avec 2 décimales max, sans zéro inutile (« 4,5 ha »).
 function formatHectares(value: number): string {
   return value.toLocaleString('fr-FR', { maximumFractionDigits: 2, minimumFractionDigits: 0 });
@@ -243,6 +260,22 @@ function formatHectares(value: number): string {
 
 function formatQuantity(value: number): string {
   return value.toLocaleString('fr-FR', { maximumFractionDigits: 3 });
+}
+
+// Total à l'hectare — miroir lecture seule de `InputsFieldArray.computeAreaTotal`
+// (doses surfaciques : handler `*_area_density` ou unité par hectare).
+function inputAreaTotal(
+  handlerName: string,
+  unit: string | null,
+  quantity: number,
+  areaHectares: number,
+): { value: number; unit: string } | null {
+  const isAreaDensity = handlerName.endsWith('_area_density') || (unit?.endsWith('/ha') ?? false);
+  if (!isAreaDensity || !(quantity > 0) || !(areaHectares > 0)) return null;
+  let base = unit ?? '';
+  if (base.endsWith('_per_hectare')) base = base.slice(0, -'_per_hectare'.length);
+  else if (base.endsWith('/ha')) base = base.slice(0, -3);
+  return { value: quantity * areaHectares, unit: base };
 }
 
 function formatDuration(
@@ -259,64 +292,48 @@ function formatDuration(
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 16, paddingBottom: 48 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  muted: { color: '#888' },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.lg, paddingBottom: spacing.xxl },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
+  muted: { color: colors.textMuted },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    gap: 8,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
-  heading: { flex: 1, fontSize: 22, fontWeight: '600', color: '#222' },
+  heading: { flex: 1, fontSize: fontSize.xl, fontWeight: '600', color: colors.textPrimary },
   errorBanner: {
-    backgroundColor: '#fde6e6',
-    borderColor: '#a3171c',
+    backgroundColor: colors.dangerBg,
+    borderColor: colors.danger,
     borderWidth: 1,
-    borderRadius: 6,
-    padding: 12,
-    marginBottom: 16,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
   },
-  errorTitle: { fontSize: 14, fontWeight: '600', color: '#a3171c', marginBottom: 4 },
-  errorMessage: { fontSize: 13, color: '#5a0c10', marginBottom: 12 },
+  errorTitle: { fontSize: fontSize.base, fontWeight: '600', color: colors.danger, marginBottom: 4 },
+  errorMessage: { fontSize: fontSize.md, color: colors.dangerText, marginBottom: spacing.md },
   retryButton: {
     alignSelf: 'flex-start',
-    backgroundColor: '#a3171c',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 4,
+    backgroundColor: colors.danger,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.sm,
   },
   retryButtonPressed: { opacity: 0.85 },
-  retryButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  section: { marginBottom: 24 },
+  retryButtonText: { color: colors.textOnBrand, fontSize: fontSize.base, fontWeight: '600' },
+  section: { marginBottom: spacing.xl },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: fontSize.sm,
     fontWeight: '600',
-    color: '#888',
+    color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
-  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
-  rowLabel: { fontSize: 14, color: '#666' },
-  rowValue: { fontSize: 14, color: '#222', fontWeight: '500' },
-  bodyText: { fontSize: 14, color: '#222', lineHeight: 20 },
-  parcelItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 8,
-    borderTopColor: '#eee',
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  parcelInfo: { flex: 1 },
-  listItem: {
-    paddingVertical: 8,
-    borderTopColor: '#eee',
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  itemName: { fontSize: 14, color: '#222', fontWeight: '500' },
-  itemSub: { fontSize: 13, color: '#666', marginTop: 2 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs },
+  rowLabel: { fontSize: fontSize.base, color: colors.textSecondary },
+  rowValue: { fontSize: fontSize.base, color: colors.textPrimary, fontWeight: '500' },
+  bodyText: { fontSize: fontSize.base, color: colors.textPrimary, lineHeight: 20 },
+  total: { fontSize: fontSize.md, color: colors.textSecondary, textAlign: 'right' },
 });

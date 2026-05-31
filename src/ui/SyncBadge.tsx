@@ -3,16 +3,18 @@ import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
 import type { InterventionSyncState } from '@core/db/models';
 
+import { colors } from './theme';
+
 interface SyncBadgeProps {
   state: InterventionSyncState;
   style?: ViewStyle;
 }
 
 const COLORS: Record<InterventionSyncState, { bg: string; fg: string }> = {
-  pending: { bg: '#fff7e6', fg: '#7a4f00' },
-  syncing: { bg: '#e6f1ff', fg: '#1d4f9e' },
-  synced: { bg: '#e6f9ee', fg: '#0c6b2c' },
-  error: { bg: '#fde6e6', fg: '#a3171c' },
+  pending: { bg: colors.warningBg, fg: colors.warning },
+  syncing: { bg: colors.infoBg, fg: colors.info },
+  synced: { bg: colors.successBg, fg: colors.success },
+  error: { bg: colors.dangerBg, fg: colors.danger },
 };
 
 export function SyncBadge({ state, style }: SyncBadgeProps) {

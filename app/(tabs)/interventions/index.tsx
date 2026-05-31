@@ -10,6 +10,7 @@ import { useSyncCycle } from '@core/sync/use-sync-cycle';
 import {
   useErrorInterventionCount,
   useInterventions,
+  useInterventionTargetCounts,
   usePendingInterventionCount,
   useProcedures,
 } from '@features/catalog/hooks';
@@ -30,6 +31,22 @@ export default function InterventionsListScreen() {
     () => new Map<string, string>(procedures.map((p: Procedure) => [p.name, p.labelFr])),
     [procedures],
   );
+
+  // Résumé « N cultures • X ha » par intervention, pour la liste.
+  const targetCounts = useInterventionTargetCounts();
+  const targetSummaries = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [id, { count, areaHectares }] of targetCounts) {
+      map.set(
+        id,
+        t('interventions.spraying.summaries.targets', {
+          count,
+          area: areaHectares.toLocaleString('fr-FR', { maximumFractionDigits: 2 }),
+        }),
+      );
+    }
+    return map;
+  }, [targetCounts, t]);
 
   // Pull-to-refresh = même cycle que le bouton Synchroniser. On garde un
   // état local `refreshing` pour piloter le RefreshControl indépendamment
@@ -94,6 +111,7 @@ export default function InterventionsListScreen() {
     <InterventionsListView
       interventions={interventions}
       procedureLabels={procedureLabels}
+      targetSummaries={targetSummaries}
       pendingCount={pendingCount}
       errorCount={errorCount}
       syncStatus={status}

@@ -64,7 +64,7 @@ export const sprayingInterventionSchema = z
     description: trimmedString().optional(),
     doers: z.array(doerSchema).min(1, 'Au moins 1 conducteur requis.'),
     inputs: z.array(inputSchema).min(1, 'Au moins 1 produit phytosanitaire requis.'),
-    targets: z.array(targetSchema).length(1, 'Exactement 1 parcelle cible.'),
+    targets: z.array(targetSchema).min(1, 'Au moins 1 parcelle cible.'),
     tools: z.array(toolSchema).min(1, 'Au moins 1 pulvérisateur requis.'),
   })
   .refine((i) => i.stopped_at.getTime() > i.started_at.getTime(), {

@@ -73,6 +73,7 @@ export default function SprayingFormScreen() {
       variants={phytoVariants}
       handlers={handlers}
       onSubmit={onSubmit}
+      onCancel={() => router.back()}
       submitting={submitting}
       submitError={submitError}
     />

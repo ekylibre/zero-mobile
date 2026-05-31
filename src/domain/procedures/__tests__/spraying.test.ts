@@ -245,7 +245,7 @@ describe('sprayingInterventionSchema — invalidations', () => {
     expect(result.success).toBe(false);
   });
 
-  it('refuse si pas exactement 1 cible (0)', () => {
+  it('refuse si aucune cible', () => {
     const result = sprayingInterventionSchema.safeParse(makeValidInput({ targets: [] }));
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -253,7 +253,7 @@ describe('sprayingInterventionSchema — invalidations', () => {
     }
   });
 
-  it("refuse si plus d'1 cible", () => {
+  it('autorise plusieurs cibles (multi-cibles)', () => {
     const result = sprayingInterventionSchema.safeParse(
       makeValidInput({
         targets: [
@@ -262,7 +262,7 @@ describe('sprayingInterventionSchema — invalidations', () => {
         ],
       }),
     );
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
   it('refuse si pas de pulvérisateur', () => {
