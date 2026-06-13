@@ -6,6 +6,30 @@ non-générées.
 
 ## [Unreleased]
 
+### P7.4 — Pré-cache offline désactivé (fix smoke device) — 2026-06-14
+
+Découvert sur device Android au 1er smoke post-rebuild du pilote :
+
+- **Symptôme** : log MapLibre Native `[Mbgl-HttpRequest] [HTTP] Unable to parse
+resourceUrl file:///data/user/0/com.ekylibre.zeromobile/cache/map/osm-style.json`.
+- **Cause** : `OfflineManager.createPack({ mapStyle: styleUri })` exige une URL
+  `http(s)://` ou `asset://` — le resource loader natif **ne supporte pas
+  `file://`** local sur Android (limitation MapLibre Native, non documentée
+  côté `@maplibre/maplibre-react-native@11.3.4`). Notre code écrivait
+  `osm-style.json` dans `Paths.cache/map/` et passait son `file://` URI.
+- **Impact** : pas de crash, log non-fatal. Mais le pack offline n'est jamais
+  créé → pas de pré-cache par bbox. Le rendu de la carte continue de marcher
+  (on passe l'objet `StyleSpecification` inline au composant `<Map>`).
+- **Fix** : `triggerOfflineRefresh` neutralisé dans `runSyncCycle`. Le code
+  d'`offline-cache.ts` reste en place (réactivable en 1 ligne dès qu'on
+  hébergera `osm-style.json` sur une URL publique stable).
+- **Mitigation** : l'**ambient cache** natif de MapLibre cache automatiquement
+  les tuiles consultées. Couvre l'usage type « charger la carte en Wi-Fi puis
+  garder la zone vue hors-ligne » pour le panel pilote v1.
+- **À faire en v1.5+** : héberger `osm-style.json` (GitHub raw du repo, S3, ou
+  endpoint Ekylibre stable), puis hardcoder l'URL HTTPS dans
+  `refreshOfflinePack`.
+
 ### Vue intervention + liste : détails, tracé parcelle, suppression, fix statut — 2026-05-30
 
 - **Fix statut sync (bug)** : le push parsait la réponse POST/PUT contre le DTO

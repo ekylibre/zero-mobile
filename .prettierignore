@@ -12,3 +12,7 @@ pnpm-lock.yaml
 # périmètre Prettier / CI. claudedocs contient des blocs de code non idempotents.
 .claude/
 claudedocs/
+
+# Régénéré par Expo à chaque start Metro sans newline final → boucle
+# infinie de "Insert ⏎" sur le lint. Pas la peine de le formater.
+expo-env.d.ts

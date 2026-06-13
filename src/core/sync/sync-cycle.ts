@@ -5,7 +5,6 @@ import { AuthError } from '@core/api/errors';
 import type { ProviderTag } from '@core/api/types';
 import { trackSyncCycle } from '@core/observability/sentry';
 import { runInitialSync } from '@features/catalog/initial-sync';
-import { triggerOfflineRefresh } from '@features/map/offline-cache';
 
 import { runPushCycle, type PushReport } from './push-engine';
 
@@ -70,10 +69,20 @@ export async function runSyncCycle(deps: SyncCycleDeps): Promise<SyncCycleReport
     pullError = formatError(error);
   }
 
-  // ---- Précache des tuiles carto (fire-and-forget, P7.4) ----
-  // Ne bloque pas le push : déclenché si le pull a réussi, en parallèle
-  // immédiat de la phase 2. La fonction avale ses propres erreurs.
-  if (pullOk) void triggerOfflineRefresh(database);
+  // ---- Précache des tuiles carto (P7.4 — temporairement désactivé) ----
+  //
+  // MapLibre Native (Android) ne sait pas charger un styleUri `file://` local
+  // via son resource loader → `OfflineManager.createPack` échoue silencieusement
+  // avec « Unable to parse resourceUrl ». Le pré-cache par bbox est désactivé
+  // jusqu'à ce qu'on héberge `osm-style.json` sur une URL publique stable
+  // (cf. docs/CHANGELOG-v1.md, P8 — désactivation P7.4 sur device).
+  //
+  // En attendant, l'**ambient cache** natif de MapLibre cache automatiquement
+  // les tuiles visitées : ça couvre l'usage type « charger la carte en Wi-Fi
+  // puis garder la zone vue hors-ligne ».
+  //
+  // import { triggerOfflineRefresh } from '@features/map/offline-cache';
+  // if (pullOk) void triggerOfflineRefresh(database);
 
   // ---- Phase 2 : push ----
   onPhase?.('pushing');
