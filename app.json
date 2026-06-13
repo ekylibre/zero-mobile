@@ -44,15 +44,16 @@
           "imageWidth": 200
         }
       ],
+      "@react-native-community/datetimepicker",
+      "@maplibre/maplibre-react-native",
       [
-        "@sentry/react-native",
+        "@sentry/react-native/expo",
         {
-          "organization": "ekylibre",
+          "url": "https://sentry.io/",
+          "organization": "osfarm",
           "project": "zero-mobile"
         }
-      ],
-      "@react-native-community/datetimepicker",
-      "@maplibre/maplibre-react-native"
+      ]
     ],
     "experiments": {
       "typedRoutes": true

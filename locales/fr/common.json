@@ -148,6 +148,13 @@
         "durationHours": "{{hours}} h",
         "durationHoursMinutes": "{{hours}} h {{minutes}}"
       },
+      "targetMap": {
+        "openButton": "Choisir sur la carte",
+        "title": "Sélection des cibles",
+        "none": "Aucune cible sélectionnée",
+        "count_one": "{{count}} cible sélectionnée",
+        "count_other": "{{count}} cibles sélectionnées"
+      },
       "handlers": {
         "population": "Population (unité)",
         "net_mass": "Masse nette (kg)",
@@ -203,7 +210,12 @@
     }
   },
   "map": {
-    "attribution": "© OpenStreetMap contributors"
+    "attribution": "© OpenStreetMap contributors",
+    "emptyTitle": "Aucune parcelle géolocalisée",
+    "emptyBody": "Resynchronisez le catalogue pour récupérer les contours des parcelles et cultures.",
+    "kindParcel": "Parcelle",
+    "kindPlant": "Culture",
+    "areaSuffix": "{{value}} ha"
   },
   "settings": {
     "title": "Paramètres",

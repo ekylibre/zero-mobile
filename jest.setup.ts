@@ -22,5 +22,27 @@ jest.mock('@maplibre/maplibre-react-native', () => {
   return {
     Map: passthrough('maplibre-map'),
     Camera: passthrough('maplibre-camera'),
+    GeoJSONSource: passthrough('maplibre-source'),
+    Layer: passthrough('maplibre-layer'),
+    OfflineManager: {
+      getPacks: jest.fn(async () => []),
+      createPack: jest.fn(async () => ({ id: 'mock-pack' })),
+      invalidatePack: jest.fn(async () => undefined),
+      deletePack: jest.fn(async () => undefined),
+    },
   };
 });
+
+// expo-file-system : on n'écrit pas sur disque dans les tests. Le fichier
+// style est juste utilisé pour son `.uri` ; on rend une URI stable.
+jest.mock('expo-file-system', () => ({
+  Paths: { cache: { uri: 'file:///mock/cache' } },
+  Directory: jest.fn().mockImplementation(() => ({
+    exists: true,
+    create: jest.fn(),
+  })),
+  File: jest.fn().mockImplementation((_dir: unknown, name: string) => ({
+    uri: `file:///mock/cache/map/${name}`,
+    write: jest.fn(),
+  })),
+}));

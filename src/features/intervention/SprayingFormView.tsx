@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Controller, useForm, type SubmitHandler } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import {
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,6 +32,7 @@ import {
 } from '@ui/index';
 
 import { InputsFieldArray } from './InputsFieldArray';
+import { TargetMapPickerModal } from './TargetMapPickerModal';
 
 // Liste canonique (miroir spraying.xml) utilisée tant que la définition de
 // procédure n'a pas été passée (ex. catalogue pas encore resynchronisé).
@@ -123,6 +125,10 @@ export function SprayingFormView({
     description: false,
   });
   const toggle = (key: SectionKey) => setExpanded((s) => ({ ...s, [key]: !s[key] }));
+
+  // Modal carto pour la sélection des cibles. Lifte ici (et non dans le
+  // Controller) pour que le state survive un re-render des fields voisins.
+  const [mapPickerOpen, setMapPickerOpen] = useState(false);
 
   // RHF empêche d'appeler onSubmit tant que la validation Zod échoue.
   // Le bandeau « incomplet » s'affiche tant qu'un tableau requis est vide
@@ -229,31 +235,53 @@ export function SprayingFormView({
             control={control}
             name="targets"
             render={({ field: { value, onChange }, fieldState: { error } }) => {
-              const selectedZones = cultivableZones.filter((z) =>
-                value.some((target) => target.cultivable_zone_id === z.id),
-              );
+              const selectedIds = value.map((t) => t.cultivable_zone_id);
+              const selectedZones = cultivableZones.filter((z) => selectedIds.includes(z.id));
+              const applyIds = (ids: string[]) =>
+                onChange(
+                  ids.map((id) => ({
+                    cultivable_zone_id: id,
+                    reference_name: 'cultivation' as const,
+                  })),
+                );
               return (
-                <MultiSelectField<CultivableZone>
-                  label={t('interventions.spraying.fields.target')}
-                  items={cultivableZones}
-                  selected={selectedZones}
-                  onChange={(zones) =>
-                    onChange(
-                      zones.map((z) => ({
-                        cultivable_zone_id: z.id,
-                        reference_name: 'cultivation' as const,
-                      })),
-                    )
-                  }
-                  getKey={(z) => z.id}
-                  getLabel={(z) => z.name}
-                  getSubtitle={(z) => targetSubtitle(z, t)}
-                  summary={(zones) => summarizeTargets(zones, t)}
-                  placeholder={t('interventions.spraying.selects.targetPlaceholder')}
-                  emptyText={t('interventions.spraying.selects.targetEmpty')}
-                  errorMessage={error?.message}
-                  testID="spraying-target-select"
-                />
+                <>
+                  <Pressable
+                    onPress={() => setMapPickerOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('interventions.spraying.targetMap.openButton')}
+                    style={({ pressed }) => [styles.mapButton, pressed && styles.mapButtonPressed]}
+                    testID="spraying-target-map-open"
+                  >
+                    <Text style={styles.mapButtonText}>
+                      {t('interventions.spraying.targetMap.openButton')}
+                    </Text>
+                  </Pressable>
+                  <MultiSelectField<CultivableZone>
+                    label={t('interventions.spraying.fields.target')}
+                    items={cultivableZones}
+                    selected={selectedZones}
+                    onChange={(zones) => applyIds(zones.map((z) => z.id))}
+                    getKey={(z) => z.id}
+                    getLabel={(z) => z.name}
+                    getSubtitle={(z) => targetSubtitle(z, t)}
+                    summary={(zones) => summarizeTargets(zones, t)}
+                    placeholder={t('interventions.spraying.selects.targetPlaceholder')}
+                    emptyText={t('interventions.spraying.selects.targetEmpty')}
+                    errorMessage={error?.message}
+                    testID="spraying-target-select"
+                  />
+                  <TargetMapPickerModal
+                    visible={mapPickerOpen}
+                    zones={cultivableZones}
+                    initialSelectedIds={selectedIds}
+                    onCancel={() => setMapPickerOpen(false)}
+                    onConfirm={(ids) => {
+                      applyIds(ids);
+                      setMapPickerOpen(false);
+                    }}
+                  />
+                </>
               );
             }}
           />
@@ -487,6 +515,9 @@ const styles = StyleSheet.create<{
   errorMessage: TextStyle;
   warningBanner: ViewStyle;
   warningText: TextStyle;
+  mapButton: ViewStyle;
+  mapButtonPressed: ViewStyle;
+  mapButtonText: TextStyle;
 }>({
   root: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1 },
@@ -520,4 +551,16 @@ const styles = StyleSheet.create<{
     marginBottom: spacing.lg,
   },
   warningText: { fontSize: fontSize.md, color: colors.warning },
+  mapButton: {
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+  },
+  mapButtonPressed: { backgroundColor: colors.surfaceAlt },
+  mapButtonText: { fontSize: fontSize.md, color: colors.textPrimary, fontWeight: '500' },
 });

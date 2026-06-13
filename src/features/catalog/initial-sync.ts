@@ -3,6 +3,8 @@ import { type Database } from '@nozbe/watermelondb';
 import type { EkylibreApiClient } from '@core/api/client';
 import type { ApiProductType } from '@core/api/dtos';
 import type { CatalogStep } from '@core/db/models';
+import { Tables } from '@core/db/schema';
+import { trackInitialSync, trackSyncStep } from '@core/observability/sentry';
 import {
   mapCultivableZoneDto,
   mapProcedureDto,
@@ -64,6 +66,7 @@ export async function runInitialSync(
   const syncState = await getOrCreateSyncState(database);
   const startStep = resolveStartStep(syncState.currentStep);
   const startIndex = STEPS.indexOf(startStep);
+  const cycleStart = Date.now();
 
   await updateSyncState(database, {
     lastPullStatus: 'in_progress',
@@ -74,14 +77,17 @@ export async function runInitialSync(
     const step = STEPS[i]!;
     await updateSyncState(database, { currentStep: step });
 
+    const stepStart = Date.now();
     try {
       await runStep(step, i, deps, onProgress);
+      trackSyncStep({ step, durationMs: Date.now() - stepStart });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Erreur inconnue';
       await updateSyncState(database, {
         lastPullStatus: 'error',
         lastPullError: message,
       });
+      trackSyncStep({ step: `${step}.error`, durationMs: Date.now() - stepStart });
       throw e;
     }
   }
@@ -93,6 +99,33 @@ export async function runInitialSync(
     currentStep: 'done',
   });
   onProgress({ step: 'done', index: STEPS.length, total: STEPS.length });
+
+  // Volumétrie de fin de sync — éclaire l'hypothèse « petite ferme »
+  // (workflow §10.4). Ne bloque jamais.
+  trackInitialSync({
+    durationMs: Date.now() - cycleStart,
+    counts: await countCatalogTables(database),
+  });
+}
+
+// Comptage best-effort des 4 tables catalogue. Si le query plante, on retombe
+// sur 0 et on laisse passer — la télémétrie n'a pas à casser la sync.
+async function countCatalogTables(database: Database): Promise<Record<string, number>> {
+  const tables: readonly [string, string][] = [
+    ['procedures', Tables.procedures],
+    ['products', Tables.products],
+    ['cultivable_zones', Tables.cultivableZones],
+    ['variants', Tables.variants],
+  ];
+  const counts: Record<string, number> = {};
+  for (const [key, name] of tables) {
+    try {
+      counts[key] = await database.collections.get(name).query().fetchCount();
+    } catch {
+      counts[key] = 0;
+    }
+  }
+  return counts;
 }
 
 function resolveStartStep(current: CatalogStep | null): CatalogStep {

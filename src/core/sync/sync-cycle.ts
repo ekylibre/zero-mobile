@@ -3,7 +3,9 @@ import type { Database } from '@nozbe/watermelondb';
 import type { EkylibreApiClient } from '@core/api/client';
 import { AuthError } from '@core/api/errors';
 import type { ProviderTag } from '@core/api/types';
+import { trackSyncCycle } from '@core/observability/sentry';
 import { runInitialSync } from '@features/catalog/initial-sync';
+import { triggerOfflineRefresh } from '@features/map/offline-cache';
 
 import { runPushCycle, type PushReport } from './push-engine';
 
@@ -54,6 +56,7 @@ export interface SyncCycleReport {
  */
 export async function runSyncCycle(deps: SyncCycleDeps): Promise<SyncCycleReport> {
   const { database, api, buildProvider, onPhase } = deps;
+  const cycleStart = Date.now();
 
   // ---- Phase 1 : pull ----
   onPhase?.('pulling');
@@ -67,6 +70,11 @@ export async function runSyncCycle(deps: SyncCycleDeps): Promise<SyncCycleReport
     pullError = formatError(error);
   }
 
+  // ---- Précache des tuiles carto (fire-and-forget, P7.4) ----
+  // Ne bloque pas le push : déclenché si le pull a réussi, en parallèle
+  // immédiat de la phase 2. La fonction avale ses propres erreurs.
+  if (pullOk) void triggerOfflineRefresh(database);
+
   // ---- Phase 2 : push ----
   onPhase?.('pushing');
   let pushReport: PushReport | null = null;
@@ -77,6 +85,17 @@ export async function runSyncCycle(deps: SyncCycleDeps): Promise<SyncCycleReport
     if (error instanceof AuthError) throw error;
     pushError = formatError(error);
   }
+
+  trackSyncCycle({
+    durationMs: Date.now() - cycleStart,
+    pullOk,
+    pullError,
+    pushAttempted: pushReport?.attempted ?? 0,
+    pushSucceeded: pushReport?.succeeded ?? 0,
+    pushValidationFailed: pushReport?.validationFailed ?? 0,
+    pushRetried: pushReport?.retried ?? 0,
+    pushMissingReferences: pushReport?.missingReferences ?? 0,
+  });
 
   return { pullOk, pullError, pushReport, pushError };
 }

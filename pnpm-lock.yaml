@@ -38,6 +38,9 @@ importers:
       expo-dev-client:
         specifier: ~55.0.35
         version: 55.0.35(expo@55.0.26)
+      expo-file-system:
+        specifier: ~55.0.22
+        version: 55.0.22(expo@55.0.26)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0))
       expo-linking:
         specifier: ~55.0.0
         version: 55.0.15(expo@55.0.26)(react-native@0.83.6(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
