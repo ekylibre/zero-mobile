@@ -23,7 +23,7 @@ describe('mapCultivableZoneDto', () => {
     });
   });
 
-  it('parse le GeoJSON de `shape_to_geojson` quand présent', () => {
+  it('parse le GeoJSON de `shape_to_geojson` quand présent (string)', () => {
     const geometry = {
       type: 'Polygon',
       coordinates: [
@@ -41,6 +41,40 @@ describe('mapCultivableZoneDto', () => {
       shape_to_geojson: JSON.stringify(geometry),
     });
     expect(result.geometry).toEqual(geometry);
+  });
+
+  it('lit `shape_geojson` (objet) sur land_parcels/plants', () => {
+    const geometry = {
+      type: 'MultiPolygon',
+      coordinates: [
+        [
+          [
+            [2.35, 48.85],
+            [2.36, 48.85],
+            [2.36, 48.86],
+            [2.35, 48.85],
+          ],
+        ],
+      ],
+    };
+    const result = mapCultivableZoneDto({
+      id: 6,
+      name: 'Bernessard 2026',
+      shape_geojson: geometry,
+    });
+    expect(result.geometry).toEqual(geometry);
+  });
+
+  it('préfère `shape_geojson` à `shape_to_geojson` quand les deux sont fournis', () => {
+    const preferred = { type: 'Point', coordinates: [1, 2] };
+    const fallback = { type: 'Point', coordinates: [9, 9] };
+    const result = mapCultivableZoneDto({
+      id: 7,
+      name: 'Conflit',
+      shape_geojson: preferred,
+      shape_to_geojson: JSON.stringify(fallback),
+    });
+    expect(result.geometry).toEqual(preferred);
   });
 
   it('deadAt null et area fallback quand absents', () => {

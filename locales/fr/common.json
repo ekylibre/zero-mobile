@@ -203,7 +203,7 @@
     }
   },
   "map": {
-    "placeholder": "La carte des parcelles sera livrée en P7."
+    "attribution": "© OpenStreetMap contributors"
   },
   "settings": {
     "title": "Paramètres",

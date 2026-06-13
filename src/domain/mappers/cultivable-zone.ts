@@ -12,17 +12,23 @@ export interface CultivableZoneRow {
   updatedAtServer: number;
 }
 
-// Le GeoJSON éventuel arrive dans `shape_to_geojson` (string). La source
-// actuelle (products?product_type=land_parcels) ne le fournit pas → null ;
-// on garde le parsing pour rester tolérant à d'autres sources.
-function parseGeometry(raw?: string | null): GeoJsonGeometry | null {
+// Le GeoJSON arrive soit en string (JSON-encoded — `cultivable_zones`), soit
+// en objet (`products?product_type=land_parcels|plants` depuis 2026-06-13).
+// Charta peut renvoyer l'un ou l'autre selon l'appelant côté Rails.
+function parseGeometry(raw: unknown): GeoJsonGeometry | null {
   if (!raw) return null;
-  try {
-    const g = JSON.parse(raw);
-    return g && typeof g === 'object' && 'type' in g ? (g as GeoJsonGeometry) : null;
-  } catch {
-    return null;
+  if (typeof raw === 'string') {
+    try {
+      const g = JSON.parse(raw);
+      return g && typeof g === 'object' && 'type' in g ? (g as GeoJsonGeometry) : null;
+    } catch {
+      return null;
+    }
   }
+  if (typeof raw === 'object' && raw !== null && 'type' in raw) {
+    return raw as GeoJsonGeometry;
+  }
+  return null;
 }
 
 // La valeur de `net_surface_area` peut être une fraction string ("4743/500")
@@ -64,7 +70,7 @@ export function mapCultivableZoneDto(dto: CultivableZoneDto): CultivableZoneRow 
   return {
     serverId: dto.id,
     name: dto.name,
-    geometry: parseGeometry(dto.shape_to_geojson),
+    geometry: parseGeometry(dto.shape_geojson ?? dto.shape_to_geojson),
     areaHectares: surfaceToHectares(dto),
     deadAt: parseTimestamp(dto.dead_at),
     shapeSvg: dto.shape_svg ?? null,
