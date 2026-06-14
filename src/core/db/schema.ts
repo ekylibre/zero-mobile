@@ -7,8 +7,10 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
 // v3 : les cibles peuvent aussi être des cultures (products?product_type=plants).
 // `cultivable_zones` devient « les cibles cultivables » (parcelles + cultures) ;
 // colonne `kind` ('land_parcel' | 'plant') pour distinguer.
+// v4 : produits portent leurs `abilities` (sérialisé JSON) — utilisées pour
+// filtrer le sélecteur d'outil selon le filter de la procedure (« can spray »).
 export const schema = appSchema({
-  version: 3,
+  version: 4,
   tables: [
     tableSchema({
       name: 'procedures',
@@ -28,6 +30,9 @@ export const schema = appSchema({
         { name: 'name', type: 'string' },
         { name: 'variant_id', type: 'number', isOptional: true },
         { name: 'variety', type: 'string', isOptional: true },
+        // JSON array de strings, ex. `["spray","sow","spread(preparation)"]`.
+        // Sert au filtrage des outils par procedure (« can spray »).
+        { name: 'abilities_json', type: 'string', isOptional: true },
         { name: 'updated_at_server', type: 'number' },
       ],
     }),

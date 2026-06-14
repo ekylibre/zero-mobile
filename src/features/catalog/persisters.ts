@@ -72,6 +72,7 @@ export async function persistProductsForType(
           m.name = row.name;
           m.variantId = row.variantId;
           m.variety = row.variety;
+          m.abilities = row.abilities;
           m.updatedAtServer = row.updatedAtServer;
         }),
       );
@@ -83,6 +84,7 @@ export async function persistProductsForType(
           m.name = row.name;
           m.variantId = row.variantId;
           m.variety = row.variety;
+          m.abilities = row.abilities;
           m.updatedAtServer = row.updatedAtServer;
         }),
       );

@@ -6,6 +6,132 @@ non-générées.
 
 ## [Unreleased]
 
+### Filtrage des équipements par procedure (sprayer = `can spray`) — 2026-06-14
+
+Résout le 2ᵉ follow-up identifié au smoke 2026-06-14 (initialement renvoyé en
+v1.5+ puis ramené dans la même session). Le sélecteur Pulvérisateur n'affiche
+plus que les équipements compatibles avec le `filter` de la procédure spraying.
+
+- **Source de vérité serveur** : `/api/v2/procedures` expose déjà
+  `parameters[].filter` (string brute, ex. `"is equipment and can spray"`) et
+  `/api/v2/products` expose `abilities` (array de strings,
+  ex. `["spray","spread(preparation)"]`, format `verbe` ou `verbe(noun)`).
+  Aucune modif côté Ekylibre nécessaire — les deux champs sont déjà là.
+- **Schema WDB v4** : ajout `products.abilities_json` (JSON array sérialisé,
+  optional), migration JS-only (pas de rebuild EAS). ⚠️ **Re-sync catalogue
+  requise** après pull pour peupler la nouvelle colonne (sinon la liste
+  d'équipements filtrée sera vide → empty state strict s'affiche).
+- **Stack app** : `productDtoSchema.abilities`, `ProductRow.abilities`,
+  `Product.abilities` (modèle WDB via `@json` + sanitizer), persister étendu.
+- **Parser de filter** : nouveau `src/domain/procedures/tool-filter.ts` —
+  `parseToolFilterAbilities(filter)` extrait les `can <verbe>` (case-insensitive,
+  ignore les arguments entre parenthèses), `productHasAllAbilities(abilities,
+required)` match sur le verbe seul (intersection). `getToolFilterFromDefinition
+(def, paramName)` extrait le filter brut depuis la `Procedure.definition` WDB.
+  Sous-ensemble de la grammaire Ekylibre (is/can/and/or, parenthèses) suffisant
+  pour spraying v1 ; un filter non reconnu renvoie `[]` → fallback non filtré.
+- **Branchement route** : `app/(tabs)/interventions/spraying.tsx` calcule
+  `sprayerEquipments` via `useMemo` puis le passe à `SprayingFormView` à la
+  place de la liste `equipments` brute. Si le filter est absent ou inconnu, on
+  passe la liste complète (sécurité : ne jamais bloquer l'utilisateur sur un
+  parsing à enrichir plus tard).
+- **Empty state strict** : si aucun équipement ne matche, le SelectField
+  affiche la clé existante `selects.toolEmpty` (« Aucun pulvérisateur dans le
+  catalogue. ») — l'agri sait qu'il doit configurer son matériel côté Ekylibre.
+- **Tests** : +18 (`parseToolFilterAbilities`, `productHasAllAbilities`,
+  `getToolFilterFromDefinition`) + ajustement du test mapper Product
+  (`abilities` propagée). Suite verte 307/307, typecheck + lint OK.
+  **Pas de rebuild EAS** (JS pur). **Re-sync catalogue requise sur device**
+  pour récupérer les abilities.
+
+### Polish UX form spraying — pré-remplissage handler + libellé FR de l'unité — 2026-06-14
+
+Suite du smoke device 2026-06-14 — résout le 1er des 2 follow-ups identifiés
+(le 2ᵉ, filtrage des équipements par procedure, a aussi été livré dans la
+foulée — voir entrée Unreleased au-dessus).
+
+- **Pré-remplissage du handler depuis l'unité par défaut du produit** :
+  au choix d'un intrant phyto, le handler `*_area_density` correspondant à
+  l'unité de la variante du produit est pré-sélectionné automatiquement
+  (`liter` → `volume_area_density`, `kilogram` → `mass_area_density`,
+  `unity` → `population`). Override systématique au changement de produit
+  — un handler choisi manuellement précédemment est réécrit (spec UX :
+  l'agri attend que le handler reflète le produit courant). Helper
+  `deriveHandlerFromBaseUnit(baseUnit, handlers)` dans
+  `spraying-handlers.ts`. Mapping construit côté route
+  (`app/(tabs)/interventions/spraying.tsx`) à partir de `Product.variantId`
+  - `Variant.unit`, passé via prop `productDefaultUnits` jusqu'à
+    `InputsFieldArray`.
+- **Affichage FR de l'unité** : `liter_per_hectare` → `l/ha`,
+  `kilogram_per_hectoliter` → `kg/hl`, etc. Les libellés vivent dans
+  `locales/fr/common.json` sous `interventions.spraying.units.*`. La
+  **valeur stockée** dans `quantity_unit` (et envoyée au serveur) **reste
+  l'unité Ekylibre canonique** brute — c'est uniquement l'affichage
+  read-only sous le sélecteur de Mesure qui change. Fallback sur la
+  valeur brute si la clé i18n manque (pas de crash).
+- **Tests** : +10 (5 sur `deriveHandlerFromBaseUnit`, 5 sur
+  `InputsFieldArray` couvrant l'affichage FR, le pré-remplissage,
+  l'override au changement de produit, le no-op sans mapping). Suite
+  verte 289/289, typecheck + lint OK. **Pas de rebuild EAS requis**
+  (changements 100 % JS/TS, Metro reload suffit).
+
+### Smoke device complet sur build pilote — 2026-06-14
+
+Tous les scénarios `docs/testing-guide.md` §1–§4 repassés sur device après le
+rebuild EAS pilote (post-icônes, post-MapLibre, post-PR Ekylibre `shape_geojson`,
+post-re-sync catalogue). **10/10 verts** :
+
+- S2 (saisie spraying offline), S5 (422), S6 (5xx, observé en pratique : 404
+  quand l'API Rails est down → traité comme transient, retry OK quand l'API
+  remonte), S7 (network down), S8 (catalogue stale, 0 POST tenté), S9 (logout
+  warning + purge locales), S10 (401 sans purge, interventions retrouvées au
+  re-login), S11 (double-tap → 1 POST), S12 (pull-to-refresh + bouton → 1 POST),
+  vérif payload `provider` (`vendor='ekylibre-mobile'` + UUID v4 + data).
+- **Green light côté code** pour distribuer au panel pilote. iOS/TestFlight
+  prêt à soumettre une fois les placeholders `eas.json` renseignés. Android
+  attend l'approbation du compte developer Ekylibre côté Google.
+
+**2 follow-ups non bloquants identifiés** (à traiter post-distribution iOS ou
+en v1.5+) :
+
+1. **Handler ne lock pas l'unité auto** sur le form spraying (régression suspectée
+   vs P5 + fix 2026-05-30, ou catalogue `procedures` pas correctement enrichi
+   par l'API). À investiguer : forme renvoyée par `/api/v2/procedures`
+   (`handlers` enrichis `{ name, indicator, unit }` ou ancienne `[string]` ?),
+   puis `spraying-handlers.ts` parser + `InputsFieldArray`.
+2. **Filtrage des équipements par procedure** : le sélecteur Pulvérisateur liste
+   tous les équipements du catalogue (devrait être restreint au type attendu par
+   `spraying.xml` → `tool: sprayer`). Différent de la limitation connue
+   « per-product handler filtering » — sera traité avec elle en v1.5+.
+
+### P7.1–P7.3 — Carte MapLibre + sélection multi-cibles cartographique — 2026-06-14
+
+Phase 7 livrée (`docs/workflow.md` §8) :
+
+- **P7.1 — MapLibre + fond OSM** : `@maplibre/maplibre-react-native@11.3.4`
+  (plugin Expo SDK 55 OK), `src/features/map/osm-style.ts` (style raster OSM
+  inline avec CGU dans le code), `src/features/map/MapView.tsx` (wrapper
+  `Map + Camera`, centre France par défaut). Tab `Carte` plein écran +
+  attribution. Mock Jest pour éviter le crash JSI.
+- **P7.2 — Couche polygones + sélection** : `src/features/map/geo.ts`
+  (`toFeatureCollection` accepte un prédicat `isSelected`, `computeBbox`,
+  `expandBbox` avec buffer cos(lat)). `GeoJSONSource` + `FillLayer` + `LineLayer`,
+  surlignage via expression `["case", ["get", "selected"], …]` (pas de
+  setFilter ni de seconde couche). Auto-fit sur la bbox des `cultivable_zones`.
+- **P7.3 — Sélection cartographique dans le form** :
+  `src/features/intervention/TargetMapPickerModal.tsx` (Modal RN plein écran,
+  toggle au tap, barre d'actions flottante en bas — pas dans un header).
+  Bouton « Choisir sur la carte » au-dessus du `MultiSelectField` existant —
+  la liste reste pour les parcelles sans géométrie ou recherche texte.
+- **API Ekylibre** : `_land_parcels.json.jbuilder` + `_plants.json.jbuilder`
+  exposent désormais `shape_geojson` (1 ligne ajoutée par jbuilder côté
+  `~/projects/ekylibre`). DTO + mapper côté app acceptent `string | objet`
+  (Charta sérialise différemment selon le contexte). 8 tests géo + 4 tests
+  modal picker.
+
+Pour fonctionner sur device : déployer la PR Ekylibre P7.0 puis re-sync
+catalogue.
+
 ### P7.4 — Pré-cache offline désactivé (fix smoke device) — 2026-06-14
 
 Découvert sur device Android au 1er smoke post-rebuild du pilote :
@@ -29,6 +155,66 @@ resourceUrl file:///data/user/0/com.ekylibre.zeromobile/cache/map/osm-style.json
 - **À faire en v1.5+** : héberger `osm-style.json` (GitHub raw du repo, S3, ou
   endpoint Ekylibre stable), puis hardcoder l'URL HTTPS dans
   `refreshOfflinePack`.
+
+### P8 — Polish pré-pilote (Sentry metrics, config release, a11y, docs) — 2026-06-14
+
+Phase 8 livrée — phase préparatoire au build pilote (`docs/workflow.md` §9) :
+
+- **P8.1 — Métriques Sentry sur la sync** : 3 helpers typés dans
+  `src/core/observability/sentry.ts` (`trackSyncStep`, `trackSyncCycle`,
+  `trackInitialSync`), no-op safe si Sentry non initialisé. `runInitialSync`
+  → breadcrumb par étape + event de fin avec **volumétrie par table** (éclaire
+  l'hypothèse « petite ferme » du workflow §10.4). `runSyncCycle` → event de
+  fin avec durée + counts push (succeeded/validation/retried/missing).
+- **P8.2 — Config release pilot** : `app.config.js` créé pour injecter
+  `SENTRY_DSN` depuis `process.env` (placeholder d'`app.json` en fallback).
+  `docs/P8-release-checklist.md` — placeholders à renseigner
+  (Apple Team ID, ASC App ID, Google Play key), workflow `build:pilot` →
+  `submit:pilot` → OTA, commandes `eas env:push production --path .env.local`
+  pour les secrets (préféré à `eas secret:create` legacy).
+- **P8.3 — README.md** : statut post-P7, stack listée (Expo SDK 55, MapLibre,
+  Node 24, pnpm 10), table commandes, pointer `docs/P8-release-checklist.md`.
+- **P8.4 — Docs pilote (FR)** : `docs/release-notes-v1-pilote.md` (à
+  transmettre aux agris du panel) et `docs/onboarding-pilote.md` (install
+  TestFlight + Internal Testing, scénario type, mises à jour OTA, signalement
+  bugs).
+- **P8.5 — A11y light pass** : `accessibilityRole="button"` +
+  `accessibilityLabel` ajoutés sur les 3 `Pressable` custom manquants
+  (`TargetMapPickerModal` Annuler/Valider avec hint compteur, bouton
+  « Choisir sur la carte »). Audit du reste : déjà couvert.
+
+### Sentry wizard — réconciliation + plugin moderne — 2026-06-14
+
+Le wizard `@sentry/wizard@latest -i reactNative` a tourné, réconciliation faite :
+
+- **Doublon supprimé** : ancien plugin `@sentry/react-native` (P1, slugs faux
+  `ekylibre/zero-mobile`) viré d'`app.json` au profit du moderne
+  `@sentry/react-native/expo` (path SDK 50+) avec slugs corrigés
+  (org `osfarm`, project `zero-mobile`).
+- **`metro.config.js`** (wizard) : `getSentryExpoConfig` câblé pour injecter
+  les Debug IDs + uploader les sourcemaps avec `SENTRY_AUTH_TOKEN`.
+- **`app/_layout.tsx`** : `export default Sentry.wrap(RootLayout)` (wizard) —
+  compatible avec notre `initSentry()` au boot (idempotent).
+- **`.env.local`** (wizard, gitignored) : `SENTRY_DSN` + `SENTRY_AUTH_TOKEN`.
+  Expo SDK 55 charge ce fichier automatiquement au start Metro → notre
+  `app.config.js` lit `process.env.SENTRY_DSN` → injecté dans
+  `Constants.expoConfig.extra.sentryDsn` → `initSentry()` boot.
+
+### Icônes tab bar + icône d'app (chouette Ekylibre) — 2026-06-14
+
+- **3 icônes tab bar** : `src/ui/icons/TabBarIcons.tsx` — `TractorIcon`
+  (Interventions, `uf937-tractor-alt`), `LandParcelIcon` (Carte,
+  `uf179-land-parcels`), `CogIcon` (Paramètres, `uf04e-cog`). SVG inlinés
+  via `react-native-svg` (pas d'asset), `fill={color}` piloté par le tab
+  bar theme.
+- **Icône d'app** : `assets/icon.png` + `assets/adaptive-icon.png` regénérées
+  depuis `uf06c-ekylibre-alt.svg` (la chouette emblématique) via ImageMagick.
+  ⚠️ Rebuild EAS dev **obligatoire** pour qu'elle apparaisse sur device
+  (les icônes sont bundlées dans l'APK/IPA, pas OTA-able).
+- **Limitation à connaître** : ImageMagick rastérise les SVG avec fond blanc
+  opaque (faute de `librsvg`). Tant que `adaptiveIcon.backgroundColor` reste
+  `#ffffff`, invisible. Si on bascule vers un fond coloré plus tard, regénérer
+  avec `rsvg-convert` pour une vraie transparence.
 
 ### Vue intervention + liste : détails, tracé parcelle, suppression, fix statut — 2026-05-30
 

@@ -282,7 +282,9 @@ geste doit être no-op silencieusement (pas d'erreur UI).
 
 - [x] **S1** Login + sync initiale → catalogue téléchargé sur le device
       (validé device 2026-05-30, après fix géométrie `cultivable_zones`).
-- [ ] **S2** Saisie spraying offline → ligne pending visible
+- [x] **S2** Saisie spraying offline → ligne pending visible (validé device
+      2026-06-14 sur build pilote ; 2 bémols hors-périmètre S2 trackés : handler
+      qui ne lock pas l'unité auto, équipements non filtrés par procedure).
 - [x] **S3** Sync online → ligne synced + intervention visible côté Eky web avec
       le bon `provider.id` (validé après fix core **P6.6** spraying Procedo +
       fix app du parsing réponse `{ id }` qui laissait la ligne « à
@@ -291,15 +293,24 @@ geste doit être no-op silencieusement (pas d'erreur UI).
       l'API v2 dédoublonne sur `provider.id` (2ᵉ POST identique → `200`, même
       `id`). Le blocker P6.5 est **levé**. Repro initiale via
       `scripts/s4-idempotence.sh` (RÉSULTAT B), confirmée corrigée depuis.
-- [ ] **S5** 422 → message serveur visible dans détail
-- [ ] **S6** 5xx → reste pending + retry OK
-- [ ] **S7** Network down → reste pending + retry OK
-- [ ] **S8** Catalogue stale → MissingServerIdError visible
-- [ ] **S9** Logout warning quand pending > 0
-- [ ] **S10** 401 → redirect login avec bannière
-- [ ] **S11** Double-tap Synchroniser → 1 seul POST
-- [ ] **S12** Pull-to-refresh + bouton parallèle → 1 seul POST
-- [ ] Vérification visuelle du payload dans Charles/logs : `provider` présent avec `vendor`, `name`, `id`, `data.app_version`, `data.os`, `data.locale`
+- [x] **S5** 422 → message serveur visible dans détail (validé device 2026-06-14).
+- [x] **S6** 5xx → reste pending + retry OK (validé device 2026-06-14 ; observé
+      en pratique : 404 quand l'API Rails est down, traité comme transient par
+      le client — retry OK quand l'API remonte).
+- [x] **S7** Network down → reste pending + retry OK (validé device 2026-06-14,
+      message d'erreur connexion distinct du 5xx).
+- [x] **S8** Catalogue stale → MissingServerIdError visible (validé device
+      2026-06-14, 0 POST tenté pour cette intervention).
+- [x] **S9** Logout warning quand pending > 0 (validé device 2026-06-14, alert
+      à 2 paragraphes + purge des locales au logout volontaire).
+- [x] **S10** 401 → redirect login avec bannière (validé device 2026-06-14,
+      interventions pending **non purgées**, retrouvées au re-login).
+- [x] **S11** Double-tap Synchroniser → 1 seul POST (validé device 2026-06-14).
+- [x] **S12** Pull-to-refresh + bouton parallèle → 1 seul POST (validé device
+      2026-06-14).
+- [x] Vérification visuelle du payload dans Charles/logs : `provider` présent avec
+      `vendor='ekylibre-mobile'`, `name`, `id`=UUID, `data.app_version`,
+      `data.os`, `data.locale` (validé device 2026-06-14).
 
 Si **tous verts** → green light pour préparer P7 (carte) et lancer le
 panel pilote en parallèle (cf. P0-checklist §1.6 + workflow §11
@@ -312,8 +323,17 @@ scénario qui casse.
 > côté core, et **S3** (push spraying) passe désormais bout-en-bout après le fix
 > core **P6.6** (procédure spraying : nœuds Procedo `ActorPresenceTest`/
 > `Division`/`nil.unit`, cf. `docs/p6.6-ekylibre-spraying-procedo-issue.md`) et
-> le fix app du parsing de la réponse d'écriture (`{ id }`). Restent à repasser
-> sur device : S2, S5–S12.
+> le fix app du parsing de la réponse d'écriture (`{ id }`).
+>
+> **MAJ 2026-06-14** — smoke device complet validé sur build pilote (post-rebuild
+> EAS, post-PR Ekylibre `shape_geojson`, post-re-sync catalogue). **10/10 verts**
+> (S2 + S5–S12 + vérif payload `provider`). Green light côté code ; iOS/TestFlight
+> prêt à soumettre une fois les placeholders `eas.json` renseignés. Android attend
+> l'approbation du compte developer Google. Les 2 follow-ups initialement
+> identifiés (handler qui ne lock pas l'unité auto, filtrage des équipements
+> par procedure) ont été **livrés dans la même session** — cf. CHANGELOG entrées
+> _Polish UX form spraying_ et _Filtrage des équipements par procedure_. Re-sync
+> catalogue requise sur device pour le 2ᵉ (peuple `products.abilities`).
 
 ## 6. Outils utiles
 

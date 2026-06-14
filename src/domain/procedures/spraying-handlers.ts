@@ -33,6 +33,15 @@ export const SPRAYING_HANDLER_UNITS: Readonly<Record<string, string>> = {
   volume_density: 'liter_per_hectoliter',
 };
 
+// Pré-remplissage du handler à partir de l'unité de base de la variante du
+// produit. La pulvérisation est toujours exprimée à l'hectare, donc on
+// sélectionne systématiquement le handler `*_area_density` correspondant.
+const SURFACE_HANDLER_BY_BASE_UNIT: Readonly<Record<string, string>> = {
+  liter: 'volume_area_density',
+  kilogram: 'mass_area_density',
+  unity: 'population',
+};
+
 const FALLBACK_HANDLER_NAMES = Object.keys(SPRAYING_HANDLER_UNITS);
 
 const labelKeyFor = (name: string): string => `interventions.spraying.handlers.${name}`;
@@ -40,6 +49,22 @@ const labelKeyFor = (name: string): string => `interventions.spraying.handlers.$
 /** Unité canonique d'un handler connu (sinon `undefined`). */
 export function unitForHandler(name: string): string | undefined {
   return SPRAYING_HANDLER_UNITS[name];
+}
+
+/**
+ * Déduit le handler à pré-remplir à partir de l'unité de base de la variante
+ * d'un produit phyto (ex. `liter` → `volume_area_density`). Retourne le handler
+ * correspondant trouvé dans `handlers` (donc avec la bonne unité Ekylibre), ou
+ * `null` si l'unité n'est pas mappée ou si le handler n'est pas dans la liste.
+ */
+export function deriveHandlerFromBaseUnit(
+  baseUnit: string | null | undefined,
+  handlers: SprayingHandlerOption[],
+): SprayingHandlerOption | null {
+  if (!baseUnit) return null;
+  const handlerName = SURFACE_HANDLER_BY_BASE_UNIT[baseUnit];
+  if (!handlerName) return null;
+  return handlers.find((h) => h.name === handlerName) ?? null;
 }
 
 function toOption(name: string, unit?: string | null): SprayingHandlerOption {

@@ -10,6 +10,9 @@ export const productDtoSchema = z
     name: z.string(),
     variant_id: z.number().optional().nullable(),
     variety: z.string().optional().nullable(),
+    // Liste des abilities (`["spray","sow"]`, `["spread(preparation)"]`…) ;
+    // utilisée pour filtrer les outils selon le filter de la procedure.
+    abilities: z.array(z.string()).optional().nullable(),
     updated_at: z.string().optional(),
   })
   .passthrough();

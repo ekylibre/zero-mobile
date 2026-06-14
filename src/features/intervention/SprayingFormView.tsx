@@ -51,6 +51,13 @@ export interface SprayingFormViewProps {
   variants: Variant[];
   /** Handlers (mesure + unité) issus de la définition de procédure spraying. */
   handlers?: SprayingHandlerOption[];
+  /**
+   * Unité de base de la variante par défaut de chaque produit `matter`
+   * (`liter`, `kilogram`, `unity`). Calculé côté parent à partir de
+   * `Product.variantId` + `Variant.unit`. Permet le pré-remplissage du handler
+   * d'un intrant au choix du produit.
+   */
+  productDefaultUnits?: ReadonlyMap<string, string>;
   onSubmit: SubmitHandler<SprayingIntervention>;
   /** Annulation (barre basse) — typiquement `router.back()`. */
   onCancel?: () => void;
@@ -74,6 +81,7 @@ export function SprayingFormView({
   matters,
   variants,
   handlers = DEFAULT_SPRAYING_HANDLERS,
+  productDefaultUnits,
   onSubmit,
   onCancel,
   submitting = false,
@@ -338,6 +346,7 @@ export function SprayingFormView({
                 variants={variants}
                 handlers={handlers}
                 totalAreaHectares={totalAreaHectares}
+                productDefaultUnits={productDefaultUnits}
                 errorMessage={error?.message}
                 testID="spraying-inputs"
               />

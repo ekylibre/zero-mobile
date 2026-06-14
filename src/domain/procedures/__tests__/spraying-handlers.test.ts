@@ -1,4 +1,8 @@
-import { parseSprayingHandlers, unitForHandler } from '../spraying-handlers';
+import {
+  deriveHandlerFromBaseUnit,
+  parseSprayingHandlers,
+  unitForHandler,
+} from '../spraying-handlers';
 
 const CANONICAL_COUNT = 7;
 
@@ -84,5 +88,30 @@ describe('unitForHandler', () => {
 
   it('renvoie undefined pour un handler inconnu', () => {
     expect(unitForHandler('area_density')).toBeUndefined();
+  });
+});
+
+describe('deriveHandlerFromBaseUnit', () => {
+  const handlers = parseSprayingHandlers(undefined);
+
+  it.each([
+    ['liter', 'volume_area_density', 'liter_per_hectare'],
+    ['kilogram', 'mass_area_density', 'kilogram_per_hectare'],
+    ['unity', 'population', 'unity'],
+  ])('mappe baseUnit=%s → handler %s (unité %s)', (baseUnit, expectedName, expectedUnit) => {
+    const derived = deriveHandlerFromBaseUnit(baseUnit, handlers);
+    expect(derived).toMatchObject({ name: expectedName, unit: expectedUnit });
+  });
+
+  it('retourne null pour une unité inconnue, vide ou absente', () => {
+    expect(deriveHandlerFromBaseUnit('hectoliter', handlers)).toBeNull();
+    expect(deriveHandlerFromBaseUnit('', handlers)).toBeNull();
+    expect(deriveHandlerFromBaseUnit(null, handlers)).toBeNull();
+    expect(deriveHandlerFromBaseUnit(undefined, handlers)).toBeNull();
+  });
+
+  it('retourne null si le handler mappé est absent de la liste passée', () => {
+    const reducedHandlers = handlers.filter((h) => h.name !== 'volume_area_density');
+    expect(deriveHandlerFromBaseUnit('liter', reducedHandlers)).toBeNull();
   });
 });

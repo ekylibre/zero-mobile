@@ -8,6 +8,11 @@ import { captureException } from '@core/observability/sentry';
 import type { SprayingIntervention } from '@domain/procedures/spraying';
 import { parseSprayingHandlers } from '@domain/procedures/spraying-handlers';
 import {
+  getToolFilterFromDefinition,
+  parseToolFilterAbilities,
+  productHasAllAbilities,
+} from '@domain/procedures/tool-filter';
+import {
   useCultivableZones,
   useInterventionById,
   useProcedureByName,
@@ -46,6 +51,36 @@ export default function SprayingFormScreen() {
     () => parseSprayingHandlers(sprayingProcedure?.definition),
     [sprayingProcedure],
   );
+
+  // Mapping productId (WDB local id) → unité de base de sa variante par défaut
+  // (`liter`, `kilogram`, `unity`…). Lookup variante via `Product.variantId`
+  // (= server id côté Variant). Sert à pré-remplir le handler dans le form
+  // intrants. Build sur `allVariants` (pas `phytoVariants`) parce que la
+  // variante par défaut peut être hors de la catégorie phyto.
+  const productDefaultUnits = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of matters) {
+      if (p.variantId == null) continue;
+      const v = allVariants.find((x) => x.serverId === p.variantId);
+      if (v?.unit) map.set(p.id, v.unit);
+    }
+    return map;
+  }, [matters, allVariants]);
+
+  // Filtrage des équipements éligibles comme « sprayer » selon le filter de la
+  // procedure spraying (typiquement `is equipment and can spray`). Le
+  // `product_type=equipments` côté hook couvre déjà le `is equipment` ; ici on
+  // applique uniquement les contraintes `can <ability>` issues du filter.
+  // Si le filter est absent ou non parsable → liste non filtrée (= comportement
+  // pré-v4, on n'enlève rien à l'utilisateur). Si le filter est valide mais
+  // qu'aucun équipement ne matche → liste vide, l'empty state strict prend le
+  // relais côté SelectField.
+  const sprayerEquipments = useMemo(() => {
+    const filter = getToolFilterFromDefinition(sprayingProcedure?.definition, 'sprayer');
+    const required = parseToolFilterAbilities(filter);
+    if (required.length === 0) return equipments;
+    return equipments.filter((e) => productHasAllAbilities(e.abilities, required));
+  }, [equipments, sprayingProcedure]);
 
   // Mode édition : on charge l'intervention + ses relations (ids locaux WDB) et
   // on reconstruit la forme du formulaire. Le hook est appelé inconditionnellement
@@ -109,10 +144,11 @@ export default function SprayingFormScreen() {
       key={isEdit ? `edit-${id}` : 'create'}
       cultivableZones={cultivableZones}
       workers={workers}
-      equipments={equipments}
+      equipments={sprayerEquipments}
       matters={matters}
       variants={phytoVariants}
       handlers={handlers}
+      productDefaultUnits={productDefaultUnits}
       initialValues={initialValues}
       onSubmit={onSubmit}
       onCancel={() => router.back()}

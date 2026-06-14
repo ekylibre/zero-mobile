@@ -6,6 +6,7 @@ export interface ProductRow {
   name: string;
   variantId: number | null;
   variety: string | null;
+  abilities: string[];
   updatedAtServer: number;
 }
 
@@ -16,6 +17,7 @@ export function mapProductDto(dto: ProductDto, productType: ApiProductType): Pro
     name: dto.name,
     variantId: dto.variant_id ?? null,
     variety: dto.variety ?? null,
+    abilities: dto.abilities ?? [],
     updatedAtServer: dto.updated_at ? Date.parse(dto.updated_at) || 0 : 0,
   };
 }

@@ -3,7 +3,10 @@ import { StyleSheet, Text, TextInput, View, type TextStyle, type ViewStyle } fro
 
 import type { Product, Variant } from '@core/db/models';
 import type { SprayingInput } from '@domain/procedures/spraying';
-import type { SprayingHandlerOption } from '@domain/procedures/spraying-handlers';
+import {
+  deriveHandlerFromBaseUnit,
+  type SprayingHandlerOption,
+} from '@domain/procedures/spraying-handlers';
 import {
   InlineAddButton,
   ItemCard,
@@ -28,6 +31,12 @@ export interface InputsFieldArrayProps {
    * pour calculer le « X l au total » des doses à l'hectare. 0 si non calculable.
    */
   totalAreaHectares?: number;
+  /**
+   * Unité de base de la variante par défaut de chaque produit (`liter`,
+   * `kilogram`, `unity`). Sert à pré-remplir le handler quand l'utilisateur
+   * sélectionne un produit. Map vide ou prop absente → pas de pré-remplissage.
+   */
+  productDefaultUnits?: ReadonlyMap<string, string>;
   /** Erreur agrégée Zod au niveau du tableau (« min 1 required »). */
   errorMessage?: string | null;
   testID?: string;
@@ -47,6 +56,7 @@ export function InputsFieldArray({
   variants,
   handlers,
   totalAreaHectares = 0,
+  productDefaultUnits,
   errorMessage,
   testID,
 }: InputsFieldArrayProps) {
@@ -57,6 +67,13 @@ export function InputsFieldArray({
     label: t(h.labelKey),
     unit: h.unit,
   }));
+
+  // Dérivation handler par défaut à partir de l'unité de la variante du produit
+  // (liter → volume_area_density / l/ha, kilogram → mass_area_density / kg/ha,
+  // unity → population / unity). Override systématique au changement de produit
+  // (cf. spec UX).
+  const deriveDefaultHandler = (productId: string): SprayingHandlerOption | null =>
+    deriveHandlerFromBaseUnit(productDefaultUnits?.get(productId), handlers);
 
   const updateRow = (index: number, patch: Partial<SprayingInput>) => {
     onChange(value.map((row, i) => (i === index ? { ...row, ...patch } : row)));
@@ -96,6 +113,7 @@ export function InputsFieldArray({
           variants={variants}
           handlerOptions={handlerOptions}
           totalAreaHectares={totalAreaHectares}
+          deriveDefaultHandler={deriveDefaultHandler}
           onUpdate={(patch) => updateRow(index, patch)}
           onRemove={() => removeRow(index)}
           testID={testID ? `${testID}-row-${index}` : undefined}
@@ -124,6 +142,7 @@ interface InputRowProps {
   variants: Variant[];
   handlerOptions: HandlerOption[];
   totalAreaHectares: number;
+  deriveDefaultHandler: (productId: string) => SprayingHandlerOption | null;
   onUpdate: (patch: Partial<SprayingInput>) => void;
   onRemove: () => void;
   testID?: string;
@@ -136,6 +155,7 @@ function InputRow({
   variants,
   handlerOptions,
   totalAreaHectares,
+  deriveDefaultHandler,
   onUpdate,
   onRemove,
   testID,
@@ -173,7 +193,22 @@ function InputRow({
         label={t('interventions.spraying.inputs.productLabel')}
         items={products}
         value={selectedProduct}
-        onChange={(p) => onUpdate({ product_id: p?.id ?? '' })}
+        onChange={(p) => {
+          // Au changement de produit, on déduit aussi le handler par défaut
+          // depuis l'unité de la variante du produit (override systématique :
+          // le pré-remplissage prend le pas sur une sélection manuelle
+          // précédente, alignée sur la spec UX).
+          if (!p) {
+            onUpdate({ product_id: '', quantity_handler: '', quantity_unit: '' });
+            return;
+          }
+          const derived = deriveDefaultHandler(p.id);
+          onUpdate({
+            product_id: p.id,
+            quantity_handler: derived?.name ?? '',
+            quantity_unit: derived?.unit ?? '',
+          });
+        }}
         getKey={(p) => p.id}
         getLabel={(p) => p.name}
         getSubtitle={(p) => p.variety ?? null}
@@ -232,9 +267,16 @@ function InputRow({
       <View style={styles.unitWrap}>
         <Text style={styles.fieldLabel}>{t('interventions.spraying.inputs.unitLabel')}</Text>
         {/* Unité dérivée du handler choisi : affichage lecture seule, jamais
-            saisie librement (sinon paire handler/unité incohérente côté API). */}
+            saisie librement (sinon paire handler/unité incohérente côté API).
+            Libellé FR court (l/ha, kg/ha…), fallback sur la valeur brute si
+            la clé i18n manque — la valeur envoyée au serveur reste l'unité
+            Ekylibre canonique stockée dans `row.quantity_unit`. */}
         <Text style={styles.unitValue} testID={testID ? `${testID}-unit` : undefined}>
-          {row.quantity_unit ? row.quantity_unit : '—'}
+          {row.quantity_unit
+            ? t(`interventions.spraying.units.${row.quantity_unit}`, {
+                defaultValue: row.quantity_unit,
+              })
+            : '—'}
         </Text>
       </View>
 

@@ -191,17 +191,18 @@ conscious choice (P6 entry in CHANGELOG).
 - `runInitialSync()` is **idempotent and resumable**. Don't add
   state outside `sync_state` — the resume model relies on
   `current_step` being the only progress marker.
-- **Schema is v3** (2026-05-31): bump `version` in `schema.ts` **and**
+- **Schema is v4** (2026-06-14): bump `version` in `schema.ts` **and**
   add a `{ toVersion, steps }` entry in `src/core/db/migrations.ts`
   for every schema change (v2 added `dead_at` + `shape_svg`; v3 added
-  `kind` — both on `cultivable_zones`). ⚠️ **Bumping `version` without
-  the matching migration entry passes `tsc` + Jest but crashes on a
-  real device** at boot (`Missing migration. Database schema is
-currently at version N, but migrations only cover range from 1 to
-N-1`) — neither typecheck nor unit tests mount a migrated SQLite DB.
-  The two files must move together. (`schemaMigrations` sorts entries
-  by `toVersion` internally and only requires the covered range to be
-  contiguous and gap-free — declaration order doesn't matter.)
+  `kind` — both on `cultivable_zones`; v4 added `abilities_json` on
+  `products`). ⚠️ **Bumping `version` without the matching migration
+  entry passes `tsc` + Jest but crashes on a real device** at boot
+  (`Missing migration. Database schema is currently at version N, but
+migrations only cover range from 1 to N-1`) — neither typecheck nor
+  unit tests mount a migrated SQLite DB. The two files must move
+  together. (`schemaMigrations` sorts entries by `toVersion` internally
+  and only requires the covered range to be contiguous and gap-free —
+  declaration order doesn't matter.)
 - **`cultivable_zones` is the unified "targetable" table** (parcelles +
   cultures), fed from **two** product endpoints, not
   `/api/v2/cultivable_zones`:
@@ -287,6 +288,21 @@ not `SvgXml` — `SvgXml` rendered blank (fill not reliably applied).
   `src/features/intervention/InputsFieldArray.tsx`
   (`SPRAYING_HANDLERS`). Per-product handler filtering depends on
   procedure XML definitions and lands in P-v1.5+.
+- **Handler pre-fill from product** (2026-06-14) — selecting an intrant
+  product auto-sets `quantity_handler` + `quantity_unit` from the
+  product's default variant unit (`Product.variantId` → `Variant.unit`
+  → `*_area_density` handler via `deriveHandlerFromBaseUnit` in
+  `spraying-handlers.ts`). Map `productDefaultUnits: Map<productId,
+baseUnit>` built in the route, passed through `SprayingFormView` to
+  `InputsFieldArray`. **Override is systematic** at every product change
+  (no "touched" flag — UX spec: handler should always reflect current
+  product). User can still override the handler manually after.
+- **Unit display in FR short form** (2026-06-14) — read-only unit text
+  under the Mesure picker shows `l/ha`, `kg/ha`… via i18n
+  `interventions.spraying.units.*`. The **stored** `quantity_unit` is
+  always the Ekylibre canonical form (`liter_per_hectare`) — only the
+  display is translated. Fallback to raw value if the i18n key is
+  missing.
 - **Persistence path** — view collects validated data → route handler
   calls `persistSprayingIntervention(database, input)` → 1
   `database.write` + 1 `database.batch(...)` writes intervention +
@@ -343,8 +359,8 @@ provider.id)`, so a duplicate POST (lost ack on flaky network)
 
 ## Where work currently stops
 
-End of P6, **validated on-device against a live Ekylibre instance
-(2026-05-30)**. Concretely:
+End of **P7 (carte des parcelles)** + **P8 polish** livré le 2026-06-14,
+1er rebuild EAS pilote en cours côté toi. Concretely:
 
 - **Full offline → sync flow works end-to-end on device.** Login →
   initial-sync → list → "+ Nouvelle intervention" → procedure picker
@@ -385,20 +401,69 @@ unit }`; the form locks the unit to the chosen handler (no free
   before mounting the form (RHF `defaultValues` is captured once at
   mount; the children arrive via separate async WDB subscriptions —
   mounting early would freeze empty arrays and drop targets/inputs).
-- **WDB schema is v3** (migrations add `dead_at` + `shape_svg` in v2,
-  `kind` in v3, all on `cultivable_zones`). **`react-native-svg`
-  added** (native dep — see rebuild gate). ⚠️ The `kind` column means
-  a **catalogue re-sync is required** after this increment (migration
-  is JS-only, no native rebuild needed).
-- **Catalogue map** (interactive parcel picker, MapLibre tiles) and
-  **pilot polish** — not yet implemented (P7–P8, see `docs/workflow.md`).
-  Note: the map needs **GeoJSON**, but the current target source gives
-  only `shape_svg` — a GeoJSON source is still TODO (architecture §9).
-- **Not yet covered**:
+- **WDB schema is v4** (migrations add `dead_at` + `shape_svg` in v2,
+  `kind` in v3, all on `cultivable_zones`; `abilities_json` on
+  `products` in v4). **`react-native-svg` added** (native dep — see
+  rebuild gate). ⚠️ The `kind` (v3) AND `abilities_json` (v4) columns
+  both mean **catalogue re-sync is required** after each increment to
+  populate the new columns (migration adds the column empty; the
+  re-pull fills it). Migration JS-only, no native rebuild needed.
+- **Tool filtering by procedure** (v4, 2026-06-14) — the tool selector
+  (sprayer) in the spraying form is filtered by the procedure's
+  `filter` clause (e.g. `"is equipment and can spray"`). Parser:
+  `parseToolFilterAbilities` in `src/domain/procedures/tool-filter.ts`
+  extracts the `can <verb>` patterns. Match:
+  `productHasAllAbilities(product.abilities, requiredVerbs)` —
+  parameter-stripped (`spread(preparation)` matches required `spread`).
+  Filter applied in the route file
+  (`app/(tabs)/interventions/spraying.tsx`), passing `sprayerEquipments`
+  to `SprayingFormView`. If the filter is absent or no equipment
+  matches → empty list → the SelectField shows
+  `selects.toolEmpty` ("Aucun pulvérisateur dans le catalogue.").
+- **P7 carte des parcelles** ✅ — `@maplibre/maplibre-react-native@11.3.4`
+  - plugin Expo, fond OSM raster inline (`src/features/map/osm-style.ts`,
+    CGU dans le code). Polygones `cultivable_zones.geometry_geojson` rendus
+    via `GeoJSONSource + Fill + Line`, surlignage par expression `["case",
+["get","selected"], …]`. Auto-fit caméra sur la bbox. **Sélection
+    multi-cibles cartographique** depuis le form spraying via
+    `TargetMapPickerModal` (Modal RN plein écran, barre d'actions flottante
+    en bas, toggle au tap). La liste `MultiSelectField` reste pour les
+    parcelles sans géométrie ou recherche texte.
+- **API Ekylibre — `shape_geojson`** ajouté sur les jbuilders
+  `_land_parcels` + `_plants` (1 ligne chacun, mirror du pattern
+  `cultivable_zones`). DTO + mapper acceptent **string OU objet** GeoJSON
+  (Charta sérialise différemment selon le contexte). PR à pousser depuis
+  `~/projects/ekylibre`.
+- **P7.4 pré-cache offline désactivé** (2026-06-14) — `OfflineManager`
+  refuse les `file://` locaux. Le code de `offline-cache.ts` reste en
+  place (réactivable en 1 ligne), l'appel `triggerOfflineRefresh` est
+  commenté dans `runSyncCycle`. L'ambient cache MapLibre prend le relais.
+  V1.5+ : héberger `osm-style.json` sur URL publique.
+- **P8 polish pré-pilote** ✅ — métriques Sentry (volumétrie sync initiale,
+  durée + erreurs par cycle), `app.config.js` qui injecte `SENTRY_DSN`
+  depuis env, `docs/P8-release-checklist.md` (placeholders à renseigner :
+  Apple Team ID, ASC App ID), `docs/release-notes-v1-pilote.md` +
+  `docs/onboarding-pilote.md` (FR pour les agris pilotes), a11y light pass
+  (`accessibilityRole` sur Pressables custom restants), README à jour.
+- **Sentry wizard** réconcilié — plugin moderne `@sentry/react-native/expo`
+  (org `osfarm`, project `zero-mobile`), `metro.config.js` câblé pour
+  sourcemaps auto, `Sentry.wrap(RootLayout)` dans `app/_layout.tsx`.
+  `.env.local` (gitignored, créé par le wizard) contient `SENTRY_DSN` +
+  `SENTRY_AUTH_TOKEN`, lu auto par Expo SDK 55 au start Metro.
+- **Icônes** — 3 tab bar icons (`src/ui/icons/TabBarIcons.tsx`, SVG inlinés
+  via `react-native-svg`) + icône d'app chouette Ekylibre
+  (`assets/icon.png` + `assets/adaptive-icon.png` regénérées depuis
+  `uf06c-ekylibre-alt.svg`). **Rebuild EAS obligatoire** pour voir l'icône
+  d'app sur device (bundled dans APK/IPA).
+- **Dépendances natives ajoutées en P7/P8** : `@maplibre/maplibre-react-native`,
+  `expo-file-system`, instrumentation Sentry (via wizard). **Rebuild EAS
+  dev/pilot requis** depuis P6.
+- **Not yet covered (vers v1.5)** :
+  - Re-activation du pré-cache offline P7.4 (besoin d'une URL publique
+    pour `osm-style.json`).
   - Per-product handler filtering (procedure `if` conditions).
-  - Picker shown as a flat list with kind in the subtitle (no section
-    headers grouping parcelles vs cultures — `MultiSelectField` is a
-    generic flat component).
-  - 1 E2E Maestro/Detox scenario (login → save → sync → verify); no
-    unit test yet for the edit route/race (integration-level).
-  - Re-run device smoke S2 + S5–S12 (S1/S3/S4 validated 2026-05-30).
+  - 1 E2E Maestro/Detox scenario (login → save → sync → verify).
+  - Re-run device smoke S2 + S5–S12 + post-rebuild pilote (S1/S3/S4
+    validated 2026-05-30).
+  - Placeholders `eas.json` à renseigner avant `pnpm build:pilot`
+    (cf. `docs/P8-release-checklist.md`).

@@ -37,9 +37,11 @@ function row(overrides: Partial<SprayingInput> = {}): SprayingInput {
 function Harness({
   initial = [],
   totalAreaHectares = 0,
+  productDefaultUnits,
 }: {
   initial?: SprayingInput[];
   totalAreaHectares?: number;
+  productDefaultUnits?: ReadonlyMap<string, string>;
 }) {
   const [value, setValue] = useState<SprayingInput[]>(initial);
   return (
@@ -50,6 +52,7 @@ function Harness({
       variants={variants}
       handlers={HANDLERS}
       totalAreaHectares={totalAreaHectares}
+      productDefaultUnits={productDefaultUnits}
       testID="inputs"
     />
   );
@@ -144,6 +147,90 @@ describe('InputsFieldArray', () => {
     );
     fireEvent.changeText(screen.getByTestId('inputs-row-0-quantity'), '2,5');
     expect(screen.getByTestId('inputs-row-0-total')).toHaveTextContent('25 l au total');
+  });
+
+  it('affiche l’unité en libellé FR court (liter_per_hectare → l/ha)', () => {
+    render(
+      <Harness
+        initial={[
+          row({
+            quantity_value: 1,
+            quantity_handler: 'volume_area_density',
+            quantity_unit: 'liter_per_hectare',
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByTestId('inputs-row-0-unit')).toHaveTextContent('l/ha');
+  });
+
+  it('garde la valeur brute si la clé i18n d’unité est absente (fallback)', () => {
+    render(
+      <Harness
+        initial={[
+          row({
+            quantity_value: 1,
+            quantity_handler: 'some_handler',
+            quantity_unit: 'parsec',
+          }),
+        ]}
+      />,
+    );
+    // Pas de clé `units.parsec` → fallback sur la valeur brute, on ne crash pas.
+    expect(screen.getByTestId('inputs-row-0-unit')).toHaveTextContent('parsec');
+  });
+
+  it('pré-remplit handler + unité depuis productDefaultUnits au choix d’un produit', () => {
+    render(
+      <Harness
+        initial={[row({ product_id: '', quantity_handler: '', quantity_unit: '' })]}
+        productDefaultUnits={new Map([['p1', 'liter']])}
+      />,
+    );
+    // Avant sélection : tiret d'unité.
+    expect(screen.getByTestId('inputs-row-0-unit')).toHaveTextContent('—');
+
+    // Ouvrir le sélecteur produit et choisir p1 (unité par défaut liter).
+    fireEvent.press(screen.getByTestId('inputs-row-0-product'));
+    fireEvent.press(screen.getByTestId('inputs-row-0-product-item-p1'));
+
+    // L'unité passe à `l/ha` (handler volume_area_density pré-rempli).
+    expect(screen.getByTestId('inputs-row-0-unit')).toHaveTextContent('l/ha');
+  });
+
+  it('écrase un handler choisi manuellement quand on change de produit', () => {
+    render(
+      <Harness
+        initial={[
+          row({
+            product_id: 'p1',
+            quantity_handler: 'net_volume',
+            quantity_unit: 'liter',
+          }),
+        ]}
+        productDefaultUnits={
+          new Map([
+            ['p1', 'liter'],
+            ['p2', 'kilogram'],
+          ])
+        }
+      />,
+    );
+    // État initial : unité brute « liter » (handler net_volume choisi à la main).
+    expect(screen.getByTestId('inputs-row-0-unit')).toHaveTextContent('l');
+
+    // Changer de produit → écrasement systématique avec la déduction (kg/ha).
+    fireEvent.press(screen.getByTestId('inputs-row-0-product'));
+    fireEvent.press(screen.getByTestId('inputs-row-0-product-item-p2'));
+    expect(screen.getByTestId('inputs-row-0-unit')).toHaveTextContent('kg/ha');
+  });
+
+  it('laisse handler + unité vides si le produit choisi n’a pas d’unité connue', () => {
+    render(<Harness initial={[row({ product_id: '' })]} productDefaultUnits={new Map([])} />);
+    fireEvent.press(screen.getByTestId('inputs-row-0-product'));
+    fireEvent.press(screen.getByTestId('inputs-row-0-product-item-p1'));
+    // Aucun mapping → handler/unit restent vides.
+    expect(screen.getByTestId('inputs-row-0-unit')).toHaveTextContent('—');
   });
 
   it('affiche errorMessage quand fourni', () => {

@@ -164,6 +164,15 @@
         "specific_weight": "Poids spécifique (kg/hl)",
         "volume_density": "Densité volumique (l/hl)"
       },
+      "units": {
+        "unity": "u",
+        "kilogram": "kg",
+        "liter": "l",
+        "kilogram_per_hectare": "kg/ha",
+        "liter_per_hectare": "l/ha",
+        "kilogram_per_hectoliter": "kg/hl",
+        "liter_per_hectoliter": "l/hl"
+      },
       "areaHectares": "{{value}} ha",
       "save": "Enregistrer l'intervention",
       "saving": "Enregistrement…",

@@ -8,18 +8,20 @@ describe('mapProductDto', () => {
       name: 'Jean Dupont',
       variantId: null,
       variety: null,
+      abilities: [],
       updatedAtServer: 0,
     });
   });
 
-  it('mappe un equipment avec variant et variety', () => {
+  it('mappe un equipment avec variant, variety et abilities', () => {
     expect(
       mapProductDto(
         {
           id: 7,
-          name: 'Tracteur 105ch',
+          name: 'Pulvérisateur',
           variant_id: 99,
-          variety: 'tractor',
+          variety: 'sprayer',
+          abilities: ['spray', 'spread(preparation)'],
           updated_at: '2025-01-01T00:00:00Z',
         },
         'equipments',
@@ -27,16 +29,20 @@ describe('mapProductDto', () => {
     ).toEqual({
       serverId: 7,
       productType: 'equipments',
-      name: 'Tracteur 105ch',
+      name: 'Pulvérisateur',
       variantId: 99,
-      variety: 'tractor',
+      variety: 'sprayer',
+      abilities: ['spray', 'spread(preparation)'],
       updatedAtServer: Date.UTC(2025, 0, 1),
     });
   });
 
-  it('null-coalesce variant_id et variety quand explicitement null', () => {
+  it('null-coalesce variant_id, variety et abilities quand absents/null', () => {
     expect(
-      mapProductDto({ id: 1, name: 'X', variant_id: null, variety: null }, 'matters'),
-    ).toMatchObject({ variantId: null, variety: null });
+      mapProductDto(
+        { id: 1, name: 'X', variant_id: null, variety: null, abilities: null },
+        'matters',
+      ),
+    ).toMatchObject({ variantId: null, variety: null, abilities: [] });
   });
 });
