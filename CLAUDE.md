@@ -359,8 +359,9 @@ provider.id)`, so a duplicate POST (lost ack on flaky network)
 
 ## Where work currently stops
 
-End of **P7 (carte des parcelles)** + **P8 polish** livré le 2026-06-14,
-1er rebuild EAS pilote en cours côté toi. Concretely:
+End of **P7 (carte des parcelles)** + **P8 polish** livré le 2026-06-14.
+**1re release Internal Testing Android publiée sur Play Console le
+2026-06-21** (v0.1.0, versionCode 4). Concretely:
 
 - **Full offline → sync flow works end-to-end on device.** Login →
   initial-sync → list → "+ Nouvelle intervention" → procedure picker
@@ -458,12 +459,27 @@ unit }`; the form locks the unit to the chosen handler (no free
 - **Dépendances natives ajoutées en P7/P8** : `@maplibre/maplibre-react-native`,
   `expo-file-system`, instrumentation Sentry (via wizard). **Rebuild EAS
   dev/pilot requis** depuis P6.
+- **Pilote Android publié** (2026-06-21) — build EAS pilot
+  `d144f4a7-3539-4bdb-a703-1e86b3853f39` (v0.1.0, versionCode 4) OK après
+  régénération d'un **Sentry Organization Auth Token** (le User Auth Token
+  du wizard était refusé en 401 par EAS au phase Sentry upload — cf.
+  mémoire [[sentry-eas-token-gotcha]]). AAB uploadé manuellement sur Play
+  Console Internal Testing (Google n'autorise pas la 1re release via API ;
+  à partir du 2e build, `pnpm submit:pilot` automatise). Note de version
+  prête : `docs/release-notes-play-internal-v0.1.0.md` à créer si besoin
+  (texte fourni inline dans la conversation 2026-06-21).
 - **Not yet covered (vers v1.5)** :
+  - Diffusion aux testeurs pilote : créer email list / Google Group dans
+    Play Console → Internal testing → Testers, partager le lien d'opt-in.
+  - Build pilot **iOS** : nécessite de renseigner `appleTeamId` + `ascAppId`
+    dans `eas.json` (placeholders aujourd'hui, cf.
+    `docs/P8-release-checklist.md` §2).
   - Re-activation du pré-cache offline P7.4 (besoin d'une URL publique
     pour `osm-style.json`).
   - Per-product handler filtering (procedure `if` conditions).
   - 1 E2E Maestro/Detox scenario (login → save → sync → verify).
   - Re-run device smoke S2 + S5–S12 + post-rebuild pilote (S1/S3/S4
     validated 2026-05-30).
-  - Placeholders `eas.json` à renseigner avant `pnpm build:pilot`
-    (cf. `docs/P8-release-checklist.md`).
+  - Questionnaires Play Console (App access, Ads, Content rating, Target
+    audience, Data safety, Privacy policy URL) — non bloquants pour
+    Internal Testing, requis pour publier en production.

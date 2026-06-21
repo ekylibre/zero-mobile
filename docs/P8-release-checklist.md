@@ -88,9 +88,26 @@ eas update --branch pilot --message "Hotfix X"
 ## 4. Pré-vol avant 1er build pilote
 
 - [ ] Apple Team ID + ASC App ID renseignés dans `eas.json`
-- [ ] `google-play-key.json` présent à la racine du projet (pas commit)
-- [ ] EAS env vars `SENTRY_DSN` et `SENTRY_AUTH_TOKEN` poussés (au moins
-      sur l'environnement `production`)
+- [x] `google-play-key.json` présent à la racine du projet (pas commit) —
+      SA `play-publisher-zero-mobile@ekylibre-play-publishing.iam.gserviceaccount.com`
+      (org GCP `osfarm.org`, projet `ekylibre-play-publishing`), clé déposée
+      le 2026-06-18.
+- [x] App `com.ekylibre.zeromobile` créée dans Google Play Console
+      (2026-06-18).
+- [x] Service Account invité dans Play Console — Users & permissions →
+      _Release to testing tracks_ sur l'app Zero Mobile (2026-06-18).
+- [x] 1er AAB uploadé manuellement sur Internal Testing (2026-06-21) —
+      release v0.1.0 (versionCode 4) publiée pour test interne. À partir
+      du 2e build, `pnpm submit:pilot` automatise.
+- [x] EAS env vars `SENTRY_DSN` et `SENTRY_AUTH_TOKEN` poussés sur
+      l'environnement `production` — Organization Auth Token régénéré et
+      mis à jour le 2026-06-21 (le précédent token du wizard était un User
+      Auth Token, refusé en `401 Invalid org token` au build du 2026-06-18).
+      Cf. mémoire [sentry-eas-token-gotcha](.../memory/sentry-eas-token-gotcha.md).
+- [x] Build pilot Android (`eas build --profile pilot --platform android`)
+      passe sans erreur Sentry — build `d144f4a7-3539-4bdb-a703-1e86b3853f39`
+      terminé le 2026-06-21 (version 0.1.0, versionCode 4, durée 26 min).
+      AAB dispo : https://expo.dev/artifacts/eas/DDdc_Ysy-ej1BqzBFaz0snKDxzy-X6jGqld0IXETla8.aab
 - [ ] `pnpm doctor` vert (18/18)
 - [ ] Suite Jest verte + lint + typecheck (`pnpm test && pnpm lint && pnpm typecheck`)
 - [ ] Smoke device : login → sync initiale → saisie spraying offline → sync
